@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Cache exposing (Cache, DependsCache, FetchedValue(..), FetchingCache, FetchingDependsCache, FetchingPackageCache)
+import Cache exposing (Cache, FetchedValue(..))
 import Compatible
 import Css as C
 import Dict exposing (Dict)
@@ -373,7 +373,7 @@ updateFetched model fetched =
 
 {-| Add versions present in packages but not in depends to depends as `NotFetched`, with `minVersion` filtering.
 -}
-addMissingVersionsToDependsCache : FetchingCache -> FetchingCache
+addMissingVersionsToDependsCache : Cache.FetchingCache -> Cache.FetchingCache
 addMissingVersionsToDependsCache fetchingCache =
     { fetchingCache
         | depends =
@@ -828,7 +828,7 @@ fetchDepends name version =
         }
 
 
-fetchNextVersions : FetchingPackageCache -> Maybe (Cmd Msg)
+fetchNextVersions : Cache.FetchingPackageCache -> Maybe (Cmd Msg)
 fetchNextVersions packageCache =
     packageCache
         |> Dict.toList
@@ -837,7 +837,7 @@ fetchNextVersions packageCache =
         |> Maybe.map (\( name, _ ) -> fetchVersions name)
 
 
-fetchNextDepends : FetchingDependsCache -> Maybe (Cmd Msg)
+fetchNextDepends : Cache.FetchingDependsCache -> Maybe (Cmd Msg)
 fetchNextDepends dependsCache =
     dependsCache
         |> Dict.toList
