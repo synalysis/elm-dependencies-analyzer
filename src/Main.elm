@@ -458,7 +458,7 @@ viewRightSection model =
 
 viewRightSectionWhenFetchingSucceeded : Model -> Cache -> ViewCache -> List (Html Msg)
 viewRightSectionWhenFetchingSucceeded model cache viewCache =
-    case rangeDictOfDepends cache.depends (allPackages model) of
+    case Cache.rangeDictOfDepends cache.depends (allPackages model) of
         Err errors ->
             [ H.ul []
                 (errors
