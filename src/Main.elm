@@ -14,15 +14,56 @@ import Json.Decode as JD
 import Json.Decode.Field as JF
 import Json.Encode as JE
 import List.Extra as ListExtra
-import MainTypes exposing (..)
 import Maybe.Extra as MaybeExtra
-import Package exposing (Package, PackageType(..))
+import Monocle.Common
+import Monocle.Compose
+import Monocle.Lens exposing (Lens)
+import Monocle.Optional exposing (Optional)
+import Package exposing (ExtraPackage, Package, PackageType(..))
 import RangeDict exposing (RangeDict)
 import SortableDict exposing (SortableDict)
 import StepResult
 import Task
 import Version exposing (Version, VersionId, VersionRange)
 import ViewCache exposing (ViewCache)
+
+
+
+-- TYPES
+
+
+type alias Model =
+    { state : State
+    , inputJson : String
+    , mouseOverVersion : Maybe VersionId
+    , packages : SortableDict String Package
+    , extraPackages : Dict String ExtraPackage
+
+    -- WIP
+    , fetchingCache : Cache.FetchingCache
+    }
+
+
+type State
+    = NothingAnalyzed
+    | JsonParsingError String
+    | Fetching Int
+    | FetchingSucceeded Cache ViewCache
+    | FetchingFailed (List (Html Msg))
+
+
+type Msg
+    = InputJsonChanged String
+    | ExampleClick
+    | OpenFileClick
+    | FileOpened File
+    | GotFileContents String
+    | AnalyzeButtonClick
+    | Fetched Cache.FetchedMsg
+    | VersionClick PackageType String Version
+    | IsDirectCheckboxClick String
+    | MouseOverVersion String Version
+    | MouseOutVersion String Version
 
 
 
@@ -808,6 +849,73 @@ applicationDependenciesDecoder =
                             ++ helper False indirect
                             |> SortableDict.fromList
                         )
+
+
+
+-- MISC HELPERS
+
+
+{-| TODO: maybe better name
+-}
+allPackages : Model -> Dict String ( Version, Bool )
+allPackages model =
+    let
+        packagesDict =
+            model.packages
+                -- TODO: I need SortableDict.toDict
+                |> SortableDict.toList
+                |> Dict.fromList
+                |> Dict.map
+                    (\_ package ->
+                        ( package.selectedVersion, package.isDirect )
+                    )
+
+        extraPackagesDict =
+            model.extraPackages
+                |> Dict.map
+                    (\_ extraPackage ->
+                        ( extraPackage.selectedVersion, False )
+                    )
+    in
+    Dict.union packagesDict extraPackagesDict
+
+
+
+-- MONOCLE - OF PACKAGES
+
+
+selectedVersionOfPackages : String -> Optional (SortableDict String Package) Version
+selectedVersionOfPackages name =
+    SortableDict.valueOfSortableDict name
+        |> Monocle.Compose.optionalWithLens
+            (Lens .selectedVersion (\b a -> { a | selectedVersion = b }))
+
+
+isDirectOfPackages : String -> Optional (SortableDict String Package) Bool
+isDirectOfPackages name =
+    SortableDict.valueOfSortableDict name
+        |> Monocle.Compose.optionalWithLens
+            (Lens .isDirect (\b a -> { a | isDirect = b }))
+
+
+modifyIsDirectOfPackages :
+    String
+    -> (Bool -> Bool)
+    -> SortableDict String Package
+    -> SortableDict String Package
+modifyIsDirectOfPackages name fn =
+    Monocle.Optional.modify (isDirectOfPackages name) fn
+
+
+
+-- MONOCLE - OF EXTRA PACKAGES
+
+
+selectedVersionOfExtraPackages : String -> Optional (Dict String ExtraPackage) Version
+selectedVersionOfExtraPackages name =
+    Monocle.Common.dict name
+        |> Monocle.Compose.optionalWithLens
+            (Lens .selectedVersion (\b a -> { a | selectedVersion = b }))
 
 
 
