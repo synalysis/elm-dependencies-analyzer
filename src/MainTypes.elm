@@ -4,7 +4,6 @@ module MainTypes exposing
     , Msg(..)
     , State(..)
     , allPackages
-    , allVersionsOfFetchingPackageCache
     , modifyIsDirectOfPackages
     , rangeDictOfDepends
     , selectedVersionOfExtraPackages
@@ -254,14 +253,3 @@ selectedVersionOfExtraPackages name =
     Monocle.Common.dict name
         |> Monocle.Compose.optionalWithLens
             (Lens .selectedVersion (\b a -> { a | selectedVersion = b }))
-
-
-
--- MONOCLE - OF FETCHING PACKAGE CACHE
-
-
-allVersionsOfFetchingPackageCache : String -> Optional FetchingPackageCache (FetchedValue (List ( Version, Int )))
-allVersionsOfFetchingPackageCache name =
-    Monocle.Common.dict name
-        |> Monocle.Compose.optionalWithLens
-            (Lens .allVersions (\b a -> { a | allVersions = b }))

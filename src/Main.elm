@@ -265,7 +265,7 @@ updateFetched model fetched =
                                 Err error ->
                                     { packages =
                                         model.fetchingCache.packages
-                                            |> (allVersionsOfFetchingPackageCache name).set Failed
+                                            |> (Cache.allVersionsOfFetchingPackageCache name).set Failed
                                     , depends = model.fetchingCache.depends
                                     }
 
@@ -273,7 +273,7 @@ updateFetched model fetched =
                                     let
                                         subNewPackageCache =
                                             model.fetchingCache.packages
-                                                |> (allVersionsOfFetchingPackageCache name).set
+                                                |> (Cache.allVersionsOfFetchingPackageCache name).set
                                                     (packageVersions
                                                         |> Dict.toList
                                                         |> List.map (\( version, pv ) -> ( version, pv.timestamp ))

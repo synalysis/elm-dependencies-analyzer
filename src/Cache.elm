@@ -5,12 +5,17 @@ module Cache exposing
     , FetchingCache
     , FetchingDependsCache
     , FetchingPackageCache
+    , allVersionsOfFetchingPackageCache
     , newFetchingCache
     , validate
     )
 
 import Dict exposing (Dict)
 import Maybe.Extra as MaybeExtra
+import Monocle.Common
+import Monocle.Compose
+import Monocle.Lens exposing (Lens)
+import Monocle.Optional exposing (Optional)
 import Version exposing (Version, VersionId, VersionRange)
 
 
@@ -224,3 +229,14 @@ validate fetchingCache =
 
         ( ( _, errorsA ), ( _, errorsB ) ) ->
             Err (errorsA ++ errorsB)
+
+
+
+-- MONOCLE - OF FETCHING PACKAGE CACHE
+
+
+allVersionsOfFetchingPackageCache : String -> Optional FetchingPackageCache (FetchedValue (List ( Version, Int )))
+allVersionsOfFetchingPackageCache name =
+    Monocle.Common.dict name
+        |> Monocle.Compose.optionalWithLens
+            (Lens .allVersions (\b a -> { a | allVersions = b }))
