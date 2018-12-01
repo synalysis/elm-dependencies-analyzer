@@ -9,12 +9,11 @@ module MainTypes exposing
     , selectedVersionOfPackages
     )
 
-import Cache exposing (Cache, FetchedValue(..), FetchingCache, FetchingPackageCache)
+import Cache exposing (Cache)
 import Dict exposing (Dict)
 import File exposing (File)
 import Html.Styled as H exposing (Html)
 import Http
-import Maybe.Extra as Maybe
 import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
@@ -46,7 +45,7 @@ type alias Model =
     , extraPackages : Dict String ExtraPackage
 
     -- WIP
-    , fetchingCache : FetchingCache
+    , fetchingCache : Cache.FetchingCache
     }
 
 
