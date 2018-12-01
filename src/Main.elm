@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Cache exposing (Cache, DependsCache, FetchedValue(..), FetchingDependsCache, FetchingPackageCache)
+import Cache exposing (Cache, DependsCache, FetchedValue(..), FetchingCache, FetchingDependsCache, FetchingPackageCache)
 import Compatible
 import Css as C
 import Dict exposing (Dict)
@@ -219,8 +219,9 @@ updateAnalyzeButtonClick model =
 
                 newFetchingCache =
                     { packages = newPackageCache
-                    , depends = addMissingVersionsToDependsCache newPackageCache model.fetchingCache.depends
+                    , depends = model.fetchingCache.depends
                     }
+                        |> addMissingVersionsToDependsCache
 
                 ( newState, nextCmd ) =
                     case fetchNextThing newFetchingCache of
@@ -281,8 +282,9 @@ updateFetched model fetched =
                                                     )
                                     in
                                     { packages = subNewPackageCache
-                                    , depends = addMissingVersionsToDependsCache subNewPackageCache model.fetchingCache.depends
+                                    , depends = model.fetchingCache.depends
                                     }
+                                        |> addMissingVersionsToDependsCache
 
                         FetchedDepends name version result ->
                             case result of
@@ -369,35 +371,37 @@ updateFetched model fetched =
 -- UPDATE - HELPERS
 
 
-{-| Add versions present in FetchingPackageCache but not in FetchingDependsCache
-to FetchingDependsCache as `NotFetched`, with `minVersion` filtering.
+{-| Add versions present in packages but not in depends to depends as `NotFetched`, with `minVersion` filtering.
 -}
-addMissingVersionsToDependsCache : FetchingPackageCache -> FetchingDependsCache -> FetchingDependsCache
-addMissingVersionsToDependsCache packageCache dependsCache =
-    packageCache
-        |> Dict.toList
-        |> List.concatMap
-            (\( name, item ) ->
-                case item.allVersions of
-                    Succeeded allVersions ->
-                        allVersions
-                            |> List.filterMap
-                                (\( version, _ ) ->
-                                    if version >= item.minVersion then
-                                        Just ( ( name, version ), NotFetched )
+addMissingVersionsToDependsCache : FetchingCache -> FetchingCache
+addMissingVersionsToDependsCache fetchingCache =
+    { fetchingCache
+        | depends =
+            fetchingCache.packages
+                |> Dict.toList
+                |> List.concatMap
+                    (\( name, item ) ->
+                        case item.allVersions of
+                            Succeeded allVersions ->
+                                allVersions
+                                    |> List.filterMap
+                                        (\( version, _ ) ->
+                                            if version >= item.minVersion then
+                                                Just ( ( name, version ), NotFetched )
 
-                                    else
-                                        Nothing
-                                )
+                                            else
+                                                Nothing
+                                        )
 
-                    NotFetched ->
-                        []
+                            NotFetched ->
+                                []
 
-                    Failed ->
-                        []
-            )
-        |> Dict.fromList
-        |> Dict.union dependsCache
+                            Failed ->
+                                []
+                    )
+                |> Dict.fromList
+                |> Dict.union fetchingCache.depends
+    }
 
 
 
