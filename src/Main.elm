@@ -202,17 +202,14 @@ updateAnalyzeButtonClick model =
 
                 newPackageCache =
                     Dict.merge
-                        (\name old accum -> Dict.insert name old accum)
-                        (\name old new accum ->
-                            let
-                                mix =
-                                    { allVersions = old.allVersions
-                                    , minVersion = new.minVersion
-                                    }
-                            in
-                            Dict.insert name mix accum
+                        Dict.insert
+                        (\name old new ->
+                            Dict.insert name
+                                { allVersions = old.allVersions
+                                , minVersion = new.minVersion
+                                }
                         )
-                        (\name new accum -> Dict.insert name new accum)
+                        Dict.insert
                         model.fetchingCache.packages
                         addonPackageCache
                         Dict.empty
@@ -271,17 +268,14 @@ updateFetched model fetched =
                                     }
 
                                 Ok packageVersions ->
-                                    let
-                                        subNewPackageCache =
-                                            model.fetchingCache.packages
-                                                |> (Cache.allVersionsOfFetchingPackageCache name).set
-                                                    (packageVersions
-                                                        |> Dict.toList
-                                                        |> List.map (\( version, pv ) -> ( version, pv.timestamp ))
-                                                        |> Succeeded
-                                                    )
-                                    in
-                                    { packages = subNewPackageCache
+                                    { packages =
+                                        model.fetchingCache.packages
+                                            |> (Cache.allVersionsOfFetchingPackageCache name).set
+                                                (packageVersions
+                                                    |> Dict.toList
+                                                    |> List.map (\( version, pv ) -> ( version, pv.timestamp ))
+                                                    |> Succeeded
+                                                )
                                     , depends = model.fetchingCache.depends
                                     }
                                         |> addMissingVersionsToDependsCache
