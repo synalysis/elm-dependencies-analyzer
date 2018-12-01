@@ -1,10 +1,7 @@
-module Types exposing
+module MainTypes exposing
     ( Fetched(..)
     , Model
     , Msg(..)
-    , Package
-    , PackageType(..)
-    , PackageVersion
     , State(..)
     , allPackages
     , allVersionsOfFetchingPackageCache
@@ -24,6 +21,7 @@ import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
+import Package exposing (ExtraPackage, Package, PackageType, PackageVersion)
 import RangeDict exposing (RangeDict)
 import SortableDict exposing (SortableDict)
 import Version exposing (Version, VersionId, VersionRange, VersionRangeX)
@@ -75,34 +73,6 @@ type Msg
 type Fetched
     = FetchedVersions String (Result Http.Error (Dict Version PackageVersion))
     | FetchedDepends String Version (Result Http.Error (Dict String VersionRange))
-
-
-
--- OTHER TYPES
-
-
-type alias Package =
-    { isDirect : Bool
-    , installedVersion : Version
-    , selectedVersion : Version
-    }
-
-
-type alias ExtraPackage =
-    { selectedVersion : Version
-    }
-
-
-type alias PackageVersion =
-    { timestamp : Int
-    , depends : FetchedValue (Dict String VersionRange)
-    }
-
-
-type PackageType
-    = Direct
-    | Indirect
-    | Extra
 
 
 
@@ -254,14 +224,14 @@ rangeDictOfDepends dependsCache packages =
 
 selectedVersionOfPackages : String -> Optional (SortableDict String Package) Version
 selectedVersionOfPackages name =
-    valueOfSortableDict name
+    SortableDict.valueOfSortableDict name
         |> Monocle.Compose.optionalWithLens
             (Lens .selectedVersion (\b a -> { a | selectedVersion = b }))
 
 
 isDirectOfPackages : String -> Optional (SortableDict String Package) Bool
 isDirectOfPackages name =
-    valueOfSortableDict name
+    SortableDict.valueOfSortableDict name
         |> Monocle.Compose.optionalWithLens
             (Lens .isDirect (\b a -> { a | isDirect = b }))
 
@@ -295,15 +265,3 @@ allVersionsOfFetchingPackageCache name =
     Monocle.Common.dict name
         |> Monocle.Compose.optionalWithLens
             (Lens .allVersions (\b a -> { a | allVersions = b }))
-
-
-
--- MONOCLE - OF SORTABLE DICT
--- TODO: maybe move to SortableDict
-
-
-valueOfSortableDict : comparable -> Optional (SortableDict comparable v) v
-valueOfSortableDict key =
-    Optional
-        (SortableDict.get key)
-        (\b a -> SortableDict.insert key b a)

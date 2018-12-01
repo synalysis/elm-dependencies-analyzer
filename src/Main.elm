@@ -15,13 +15,14 @@ import Json.Decode as JD
 import Json.Decode.Field as JF
 import Json.Encode as JE
 import List.Extra as ListExtra
+import MainTypes exposing (..)
 import Maybe.Extra as MaybeExtra
+import Package exposing (Package, PackageType(..), PackageVersion)
 import Parser as P exposing ((|.), (|=))
 import RangeDict exposing (RangeDict)
 import SortableDict exposing (SortableDict)
 import StepResult
 import Task
-import Types exposing (..)
 import Version exposing (Version, VersionId, VersionRange)
 import ViewCache exposing (ViewCache)
 

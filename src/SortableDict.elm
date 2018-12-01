@@ -10,9 +10,11 @@ module SortableDict exposing
     , remove
     , toList
     , update
+    , valueOfSortableDict
     )
 
 import Dict exposing (Dict)
+import Monocle.Optional exposing (Optional)
 
 
 {-| TODO: better implementation
@@ -144,3 +146,12 @@ fromList list =
         (Dict.fromList <| List.indexedMap (\p kv -> ( p, kv )) list)
         (Dict.fromList <| List.indexedMap (\p ( k, v ) -> ( k, p )) list)
         (Dict.fromList list)
+
+
+
+-- MONOCLE - OF SORTABLE DICT
+
+
+valueOfSortableDict : comparable -> Optional (SortableDict comparable v) v
+valueOfSortableDict key =
+    Optional (get key) (\b a -> insert key b a)

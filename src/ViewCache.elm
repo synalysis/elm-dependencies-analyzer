@@ -8,6 +8,7 @@ module ViewCache exposing
 import Cache exposing (Cache)
 import Compatible
 import Dict exposing (Dict)
+import Package exposing (Package)
 import SortableDict exposing (SortableDict)
 import StepResult
 import Version exposing (Version, VersionId)
@@ -15,18 +16,6 @@ import Version exposing (Version, VersionId)
 
 
 -- TYPES
-
-
-{-| Copied from Types.elm
-
-    TODO: handle this better
-
--}
-type alias Package =
-    { isDirect : Bool
-    , installedVersion : Version
-    , selectedVersion : Version
-    }
 
 
 {-| Caching to make view faster.
