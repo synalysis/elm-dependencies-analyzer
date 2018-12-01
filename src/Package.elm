@@ -2,10 +2,8 @@ module Package exposing
     ( ExtraPackage
     , Package
     , PackageType(..)
-    , PackageVersion
     )
 
-import Cache exposing (FetchedValue(..))
 import Dict exposing (Dict)
 import Version exposing (Version, VersionRange)
 
@@ -23,12 +21,6 @@ type alias Package =
 
 type alias ExtraPackage =
     { selectedVersion : Version
-    }
-
-
-type alias PackageVersion =
-    { timestamp : Int
-    , depends : FetchedValue (Dict String VersionRange)
     }
 
 

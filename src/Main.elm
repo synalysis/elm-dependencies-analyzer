@@ -10,15 +10,13 @@ import File.Select
 import Html.Styled as H exposing (Html)
 import Html.Styled.Attributes as A
 import Html.Styled.Events as HE
-import Http
 import Json.Decode as JD
 import Json.Decode.Field as JF
 import Json.Encode as JE
 import List.Extra as ListExtra
 import MainTypes exposing (..)
 import Maybe.Extra as MaybeExtra
-import Package exposing (Package, PackageType(..), PackageVersion)
-import Parser as P exposing ((|.), (|=))
+import Package exposing (Package, PackageType(..))
 import RangeDict exposing (RangeDict)
 import SortableDict exposing (SortableDict)
 import StepResult
@@ -221,7 +219,7 @@ updateAnalyzeButtonClick model =
                         |> addMissingVersionsToDependsCache
 
                 ( newState, nextCmd ) =
-                    case fetchNextThing newFetchingCache of
+                    case Cache.fetchNextThing newFetchingCache of
                         Just cmd ->
                             ( Fetching 0, cmd )
 
@@ -244,13 +242,13 @@ updateAnalyzeButtonClick model =
                 , fetchingCache = newFetchingCache
                 , state = newState
               }
-            , nextCmd
+            , Cmd.map Fetched nextCmd
             )
 
 
 updateFetched :
     Model
-    -> Fetched
+    -> Cache.FetchedMsg
     -> ( Model, Cmd Msg )
 updateFetched model fetched =
     case model.state of
@@ -258,7 +256,7 @@ updateFetched model fetched =
             let
                 newFetchingCache =
                     case fetched of
-                        FetchedVersions name result ->
+                        Cache.FetchedVersions name result ->
                             case result of
                                 Err error ->
                                     { packages =
@@ -280,7 +278,7 @@ updateFetched model fetched =
                                     }
                                         |> addMissingVersionsToDependsCache
 
-                        FetchedDepends name version result ->
+                        Cache.FetchedDepends name version result ->
                             case result of
                                 Err error ->
                                     { packages = model.fetchingCache.packages
@@ -304,7 +302,7 @@ updateFetched model fetched =
 
                 newExtraPackages =
                     case fetched of
-                        FetchedVersions name (Ok packageVersions) ->
+                        Cache.FetchedVersions name (Ok packageVersions) ->
                             if not (SortableDict.member name model.packages) then
                                 if not (Dict.member name model.extraPackages) then
                                     case ListExtra.last <| Dict.keys <| packageVersions of
@@ -328,7 +326,7 @@ updateFetched model fetched =
                             model.extraPackages
 
                 maybeNextCmd =
-                    fetchNextThing newFetchingCache
+                    Cache.fetchNextThing newFetchingCache
 
                 newDone =
                     oldDone + 1
@@ -353,7 +351,7 @@ updateFetched model fetched =
                 , extraPackages = newExtraPackages
                 , state = newState
               }
-            , Maybe.withDefault Cmd.none maybeNextCmd
+            , Cmd.map Fetched <| Maybe.withDefault Cmd.none maybeNextCmd
             )
 
         _ ->
@@ -781,76 +779,6 @@ viewVersion { model, cache, viewCache, packageType, selectedVersion, packageNeed
 
 
 
--- HTTP
-
-
-{-|
-
-    All requests are cached by a PHP script I wrote for this project.
-
-    1) query "AUTHOR/PROJECT" returns cached version of
-       https://package.elm-lang.org/packages/AUTHOR/PROJECT/releases.json
-
-    2) query "AUTHOR/PROJECT/VERSION" returns cached version of
-       https://raw.githubusercontent.com/AUTHOR/PROJECT/VERSION/elm.json
-
-    I'm using caching here to
-    - work around CORS restriction (elm-lang.org isn't sending "Access-Control-Allow-Origin: *" header)
-    - speed up slow queries (elm-lang.org often takes over 500ms per request)
-    - enforce caching to reduce load on backend
-    - learn about HTTP caching :)
-
--}
-cacheUrl : String
-cacheUrl =
-    "https://www.markuslaire.com/github/elm-dependencies-analyzer/cache.php?"
-
-
-fetchVersions : String -> Cmd Msg
-fetchVersions name =
-    Http.get
-        { url = cacheUrl ++ name
-        , expect = Http.expectJson (\a -> Fetched (FetchedVersions name a)) packageVersionsDecoder
-        }
-
-
-fetchDepends : String -> Version -> Cmd Msg
-fetchDepends name version =
-    Http.get
-        { url = cacheUrl ++ name ++ "/" ++ Version.versionToStr version
-        , expect = Http.expectJson (\a -> Fetched (FetchedDepends name version a)) packageDependenciesDecoder
-        }
-
-
-fetchNextVersions : Cache.FetchingPackageCache -> Maybe (Cmd Msg)
-fetchNextVersions packageCache =
-    packageCache
-        |> Dict.toList
-        |> List.filter (\( _, item ) -> item.allVersions == NotFetched)
-        |> List.head
-        |> Maybe.map (\( name, _ ) -> fetchVersions name)
-
-
-fetchNextDepends : Cache.FetchingDependsCache -> Maybe (Cmd Msg)
-fetchNextDepends dependsCache =
-    dependsCache
-        |> Dict.toList
-        |> List.filter (\( _, fetched ) -> fetched == NotFetched)
-        |> List.head
-        |> Maybe.map (\( ( name, version ), _ ) -> fetchDepends name version)
-
-
-fetchNextThing : Cache.FetchingCache -> Maybe (Cmd Msg)
-fetchNextThing fetchingCache =
-    case fetchNextDepends fetchingCache.depends of
-        Just cmd ->
-            Just cmd
-
-        Nothing ->
-            fetchNextVersions fetchingCache.packages
-
-
-
 -- DECODERS
 
 
@@ -880,47 +808,6 @@ applicationDependenciesDecoder =
                             ++ helper False indirect
                             |> SortableDict.fromList
                         )
-
-
-{-| decodes dependencies from package elm.json
--}
-packageDependenciesDecoder : JD.Decoder (Dict String VersionRange)
-packageDependenciesDecoder =
-    JF.require "dependencies" (JD.keyValuePairs Version.versionRangeDecoder) <|
-        (Dict.fromList >> JD.succeed)
-
-
-{-| decodes <https://package.elm-lang.org/packages/AUTHOR/PROJECT/releases.json>
--}
-packageVersionsDecoder : JD.Decoder (Dict Version PackageVersion)
-packageVersionsDecoder =
-    JD.keyValuePairs JD.int
-        |> JD.andThen
-            (\list ->
-                let
-                    decoder list_ =
-                        case list_ of
-                            [] ->
-                                JD.succeed Dict.empty
-
-                            ( versionStr, timestamp ) :: rest ->
-                                case P.run Version.versionStrParser (String.replace "." ":" versionStr) of
-                                    Ok version ->
-                                        decoder rest
-                                            |> JD.andThen
-                                                (Dict.insert
-                                                    version
-                                                    { timestamp = timestamp
-                                                    , depends = NotFetched
-                                                    }
-                                                    >> JD.succeed
-                                                )
-
-                                    Err _ ->
-                                        JD.fail "Invalid Version"
-                in
-                decoder list
-            )
 
 
 

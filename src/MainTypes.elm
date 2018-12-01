@@ -1,6 +1,5 @@
 module MainTypes exposing
-    ( Fetched(..)
-    , Model
+    ( Model
     , Msg(..)
     , State(..)
     , allPackages
@@ -20,7 +19,7 @@ import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
-import Package exposing (ExtraPackage, Package, PackageType, PackageVersion)
+import Package exposing (ExtraPackage, Package, PackageType)
 import RangeDict exposing (RangeDict)
 import SortableDict exposing (SortableDict)
 import Version exposing (Version, VersionId, VersionRange, VersionRangeX)
@@ -62,16 +61,11 @@ type Msg
     | FileOpened File
     | GotFileContents String
     | AnalyzeButtonClick
-    | Fetched Fetched
+    | Fetched Cache.FetchedMsg
     | VersionClick PackageType String Version
     | IsDirectCheckboxClick String
     | MouseOverVersion String Version
     | MouseOutVersion String Version
-
-
-type Fetched
-    = FetchedVersions String (Result Http.Error (Dict Version PackageVersion))
-    | FetchedDepends String Version (Result Http.Error (Dict String VersionRange))
 
 
 

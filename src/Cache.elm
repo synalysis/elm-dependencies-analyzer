@@ -1,21 +1,27 @@
 module Cache exposing
     ( Cache
     , DependsCache
+    , FetchedMsg(..)
     , FetchedValue(..)
     , FetchingCache
     , FetchingDependsCache
     , FetchingPackageCache
     , allVersionsOfFetchingPackageCache
+    , fetchNextThing
     , newFetchingCache
     , validate
     )
 
 import Dict exposing (Dict)
+import Http
+import Json.Decode as JD
+import Json.Decode.Field as JF
 import Maybe.Extra as MaybeExtra
 import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
+import Parser as P exposing ((|.), (|=))
 import Version exposing (Version, VersionId, VersionRange)
 
 
@@ -71,6 +77,21 @@ type FetchedValue a
     = NotFetched
     | Succeeded a
     | Failed
+
+
+type alias PackageVersion =
+    { timestamp : Int
+    , depends : FetchedValue (Dict String VersionRange)
+    }
+
+
+
+-- TYPES - MSG
+
+
+type FetchedMsg
+    = FetchedVersions String (Result Http.Error (Dict Version PackageVersion))
+    | FetchedDepends String Version (Result Http.Error (Dict String VersionRange))
 
 
 
@@ -229,6 +250,121 @@ validate fetchingCache =
 
         ( ( _, errorsA ), ( _, errorsB ) ) ->
             Err (errorsA ++ errorsB)
+
+
+
+-- HTTP
+
+
+{-|
+
+    All requests are cached by a PHP script I wrote for this project.
+
+    1) query "AUTHOR/PROJECT" returns cached version of
+       https://package.elm-lang.org/packages/AUTHOR/PROJECT/releases.json
+
+    2) query "AUTHOR/PROJECT/VERSION" returns cached version of
+       https://raw.githubusercontent.com/AUTHOR/PROJECT/VERSION/elm.json
+
+    I'm using caching here to
+    - work around CORS restriction (elm-lang.org isn't sending "Access-Control-Allow-Origin: *" header)
+    - speed up slow queries (elm-lang.org often takes over 500ms per request)
+    - enforce caching to reduce load on backend
+    - learn about HTTP caching :)
+
+-}
+cacheUrl : String
+cacheUrl =
+    "https://www.markuslaire.com/github/elm-dependencies-analyzer/cache.php?"
+
+
+fetchVersions : String -> Cmd FetchedMsg
+fetchVersions name =
+    Http.get
+        { url = cacheUrl ++ name
+        , expect = Http.expectJson (FetchedVersions name) packageVersionsDecoder
+        }
+
+
+fetchDepends : String -> Version -> Cmd FetchedMsg
+fetchDepends name version =
+    Http.get
+        { url = cacheUrl ++ name ++ "/" ++ Version.versionToStr version
+        , expect = Http.expectJson (FetchedDepends name version) packageDependenciesDecoder
+        }
+
+
+fetchNextVersions : FetchingPackageCache -> Maybe (Cmd FetchedMsg)
+fetchNextVersions packageCache =
+    packageCache
+        |> Dict.toList
+        |> List.filter (\( _, item ) -> item.allVersions == NotFetched)
+        |> List.head
+        |> Maybe.map (\( name, _ ) -> fetchVersions name)
+
+
+fetchNextDepends : FetchingDependsCache -> Maybe (Cmd FetchedMsg)
+fetchNextDepends dependsCache =
+    dependsCache
+        |> Dict.toList
+        |> List.filter (\( _, fetched ) -> fetched == NotFetched)
+        |> List.head
+        |> Maybe.map (\( ( name, version ), _ ) -> fetchDepends name version)
+
+
+fetchNextThing : FetchingCache -> Maybe (Cmd FetchedMsg)
+fetchNextThing fetchingCache =
+    case fetchNextDepends fetchingCache.depends of
+        Just cmd ->
+            Just cmd
+
+        Nothing ->
+            fetchNextVersions fetchingCache.packages
+
+
+
+-- DECODERS
+
+
+{-| decodes dependencies from package elm.json
+-}
+packageDependenciesDecoder : JD.Decoder (Dict String VersionRange)
+packageDependenciesDecoder =
+    JF.require "dependencies" (JD.keyValuePairs Version.versionRangeDecoder) <|
+        (Dict.fromList >> JD.succeed)
+
+
+{-| decodes <https://package.elm-lang.org/packages/AUTHOR/PROJECT/releases.json>
+-}
+packageVersionsDecoder : JD.Decoder (Dict Version PackageVersion)
+packageVersionsDecoder =
+    JD.keyValuePairs JD.int
+        |> JD.andThen
+            (\list ->
+                let
+                    decoder list_ =
+                        case list_ of
+                            [] ->
+                                JD.succeed Dict.empty
+
+                            ( versionStr, timestamp ) :: rest ->
+                                case P.run Version.versionStrParser (String.replace "." ":" versionStr) of
+                                    Ok version ->
+                                        decoder rest
+                                            |> JD.andThen
+                                                (Dict.insert
+                                                    version
+                                                    { timestamp = timestamp
+                                                    , depends = NotFetched
+                                                    }
+                                                    >> JD.succeed
+                                                )
+
+                                    Err _ ->
+                                        JD.fail "Invalid Version"
+                in
+                decoder list
+            )
 
 
 
