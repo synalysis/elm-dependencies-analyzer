@@ -33,7 +33,7 @@ import ViewCache exposing (ViewCache)
 
 
 type alias Model =
-    { state : State
+    { state : ModelState
     , inputJson : String
     , mouseOverVersion : Maybe VersionId
     , packages : SortableDict String Package
@@ -44,7 +44,7 @@ type alias Model =
     }
 
 
-type State
+type ModelState
     = NothingAnalyzed
     | JsonParsingError String
     | Fetching Int
