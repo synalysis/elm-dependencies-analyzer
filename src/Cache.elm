@@ -145,7 +145,7 @@ of each package, keeping track of reverse dependencies.
 dependsOfSelectedVersions :
     DependsCache
     -> Dict String ( Version, Bool )
-    -> Result String (Dict String ( Version, Int, Set String ))
+    -> Result String (Dict String ( Version, Int, Set VersionId ))
 dependsOfSelectedVersions dependsCache packages =
     let
         initialVersionIds =
@@ -171,9 +171,9 @@ dependsOfSelectedVersions dependsCache packages =
 
         step :
             Set String
-            -> List ( VersionId, Int, Set String )
-            -> Dict String ( Version, Int, Set String )
-            -> Result String (Dict String ( Version, Int, Set String ))
+            -> List ( VersionId, Int, Set VersionId )
+            -> Dict String ( Version, Int, Set VersionId )
+            -> Result String (Dict String ( Version, Int, Set VersionId ))
         step seen todo dict =
             case todo of
                 [] ->
@@ -222,7 +222,7 @@ dependsOfSelectedVersions dependsCache packages =
                                                                 Ok
                                                                     ( ( childName, childVersion )
                                                                     , depth + 1
-                                                                    , Set.singleton name
+                                                                    , Set.singleton ( name, version )
                                                                     )
 
                                                             Nothing ->
