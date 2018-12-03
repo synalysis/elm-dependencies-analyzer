@@ -263,37 +263,15 @@ describeParentIds reverseDepends parentIds =
     in
     case rMappedParentIds of
         Ok mappedParentIds ->
-            let
-                filteredParentIds =
-                    filterParentIds <| sortParentIds mappedParentIds
-
-                filteredParentIdCount =
-                    List.length filteredParentIds
-            in
-            case List.head filteredParentIds of
-                Just ( ( parentName, parentVersion ), _, _ ) ->
-                    parentName
-                        ++ " "
-                        ++ Version.versionToStr parentVersion
-                        ++ (if filteredParentIdCount > 1 then
-                                " (and "
-                                    ++ String.fromInt (filteredParentIdCount - 1)
-                                    ++ " other"
-                                    ++ (if filteredParentIdCount > 2 then
-                                            "s"
-
-                                        else
-                                            ""
-                                       )
-                                    ++ ")"
-
-                            else
-                                ""
-                           )
-
-                Nothing ->
+            case filterParentIds <| sortParentIds mappedParentIds of
+                [] ->
                     -- IMPOSSIBLE
                     "ERROR"
+
+                some ->
+                    some
+                        |> List.map (\( parentId, _, _ ) -> Version.idToStr parentId)
+                        |> String.join ", "
 
         Err _ ->
             -- IMPOSSIBLE
