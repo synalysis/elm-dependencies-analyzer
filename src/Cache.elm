@@ -133,9 +133,8 @@ of each package, keeping track of reverse dependencies.
       - items with `True` are the initial VersionId:s
       - items with `False` are the VersionId:s which can be used during recursive search
 
-  - on success, return Dict of found packages
-      - For each package return (version, minDepth, immediateParents) where
-          - version is the version given in `packages`
+  - on success, return Dict of found VersionId:s
+      - For each VersionId return (minDepth, immediateParents) where
           - minDepth is minimum depth for this VersionId
               - initial VersionId:s have minDepth of 0,
                 their immediate dependencies have minDepth of 1, etc.
@@ -145,7 +144,7 @@ of each package, keeping track of reverse dependencies.
 dependsOfSelectedVersions :
     DependsCache
     -> Dict String ( Version, Bool )
-    -> Result String (Dict String ( Version, Int, Set VersionId ))
+    -> Result String (Dict VersionId ( Int, Set VersionId ))
 dependsOfSelectedVersions dependsCache packages =
     let
         initialVersionIds =
@@ -172,38 +171,42 @@ dependsOfSelectedVersions dependsCache packages =
         step :
             Set String
             -> List ( VersionId, Int, Set VersionId )
-            -> Dict String ( Version, Int, Set VersionId )
-            -> Result String (Dict String ( Version, Int, Set VersionId ))
+            -> Dict VersionId ( Int, Set VersionId )
+            -> Result String (Dict VersionId ( Int, Set VersionId ))
         step seen todo dict =
             case todo of
                 [] ->
                     Ok dict
 
                 ( ( name, version ), depth, immediateParents ) :: restTodo ->
-                    case Dict.get name dict of
-                        Just ( prevVersion, prevDepth, prevImmediateParents ) ->
-                            if prevVersion == version && prevDepth == depth then
+                    case Dict.get ( name, version ) dict of
+                        Just ( prevDepth, prevImmediateParents ) ->
+                            if prevDepth == depth then
                                 let
                                     newImmediateParents =
                                         Set.intersect prevImmediateParents immediateParents
 
                                     newDict =
-                                        Dict.insert name ( version, depth, newImmediateParents ) dict
+                                        Dict.insert ( name, version ) ( depth, newImmediateParents ) dict
                                 in
                                 step seen restTodo newDict
 
                             else
-                                Err <| name ++ " has conflicting prevVersion/prevDepth (IMPOSSIBLE)"
+                                Err <|
+                                    Version.idToStr ( name, version )
+                                        ++ " has conflicting prevDepth (IMPOSSIBLE)"
 
                         Nothing ->
                             case Dict.get ( name, version ) dependsCache of
                                 Nothing ->
-                                    Err <| Version.idToStr ( name, version ) ++ " is not in dependsCache (IMPOSSIBLE)"
+                                    Err <|
+                                        Version.idToStr ( name, version )
+                                            ++ " is not in dependsCache (IMPOSSIBLE)"
 
                                 Just depends ->
                                     let
                                         newDict =
-                                            Dict.insert name ( version, depth, immediateParents ) dict
+                                            Dict.insert ( name, version ) ( depth, immediateParents ) dict
 
                                         newSeen =
                                             depends
@@ -254,22 +257,17 @@ rangeDictOfDepends dependsCache packages =
                     deps
                         |> Dict.toList
                         |> List.map
-                            (\( parentName, ( parentVersion, _, _ ) ) ->
-                                case Dict.get ( parentName, parentVersion ) dependsCache of
+                            (\( parentId, _ ) ->
+                                case Dict.get parentId dependsCache of
                                     Just depends ->
                                         Dict.toList depends
-                                            |> List.map
-                                                (\( name, vr ) ->
-                                                    ( ( parentName, parentVersion ), name, vr )
-                                                )
+                                            |> List.map (\( name, vr ) -> ( parentId, name, vr ))
                                             |> Ok
 
                                     Nothing ->
-                                        let
-                                            nameVerStr =
-                                                parentName ++ " " ++ Version.versionToStr parentVersion
-                                        in
-                                        Err <| nameVerStr ++ " not found in dependsCache. (IMPOSSIBLE)"
+                                        Err <|
+                                            Version.idToStr parentId
+                                                ++ " not found in dependsCache. (IMPOSSIBLE)"
                             )
                         |> ResultExtra.combine
                         |> Result.map List.concat
@@ -277,7 +275,7 @@ rangeDictOfDepends dependsCache packages =
                 mustContain =
                     deps
                         |> Dict.toList
-                        |> List.map (\( name, ( version, _, _ ) ) -> ( name, version ))
+                        |> List.map Tuple.first
             in
             case rVrList of
                 Err error ->
