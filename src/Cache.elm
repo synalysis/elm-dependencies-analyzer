@@ -24,6 +24,8 @@ import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
 import Parser as P exposing ((|.), (|=))
 import RangeDict exposing (RangeDict)
+import Result.Extra as ResultExtra
+import Set exposing (Set)
 import Version exposing (Version, VersionId, VersionRange)
 
 
@@ -124,118 +126,168 @@ fetchedValueToMaybe status =
 -- MISC
 
 
-{-| Create RangeDict from depends of given versions of each package.
+{-| Starting from set of initial VersionId:s, recursively find all dependencies using given version
+of each package, keeping track of reverse dependencies.
 
-    - Returns list of errors if dependsCache doesn't contain needed values or given list is empty.
+  - `packages`
+      - items with `True` are the initial VersionId:s
+      - items with `False` are the VersionId:s which can be used during recursive search
 
-    TODO: maybe create new function getSelected to use new version more easily
+  - on success, return Dict of found packages
+      - For each package return (version, minDepth, immediateParents) where
+          - version is the version given in `packages`
+          - minDepth is minimum depth for this VersionId
+              - initial VersionId:s have minDepth of 0,
+                their immediate dependencies have minDepth of 1, etc.
+          - immediateParents are the immediate reverse dependencies, at (minDepth - 1)
 
 -}
-rangeDictOfDepends : DependsCache -> Dict String ( Version, Bool ) -> Result (List String) RangeDict
-rangeDictOfDepends dependsCache packages =
-    if Dict.isEmpty packages then
-        Err [ "No packages selected" ]
+dependsOfSelectedVersions :
+    DependsCache
+    -> Dict String ( Version, Bool )
+    -> Result String (Dict String ( Version, Int, Set VersionId ))
+dependsOfSelectedVersions dependsCache packages =
+    let
+        initialVersionIds =
+            packages
+                |> Dict.toList
+                |> List.filterMap
+                    (\( name, ( version, isInitial ) ) ->
+                        if isInitial then
+                            Just ( name, version )
 
-    else
-        let
-            findAllPackages : List VersionId -> Dict String Version -> Dict String Version
-            findAllPackages list dict =
-                List.foldl folder dict list
+                        else
+                            Nothing
+                    )
 
-            folder : VersionId -> Dict String Version -> Dict String Version
-            folder ( parentName, parentVersion ) dict =
-                case Dict.get parentName dict of
-                    Just _ ->
-                        dict
+        initialTodo =
+            initialVersionIds
+                |> List.map (\id -> ( id, 0, Set.empty ))
 
-                    Nothing ->
-                        let
-                            newDict =
-                                Dict.insert parentName parentVersion dict
-                        in
-                        case Dict.get ( parentName, parentVersion ) dependsCache of
-                            Just depends ->
+        initialSeen =
+            initialVersionIds
+                |> List.map Tuple.first
+                |> Set.fromList
+
+        step :
+            Set String
+            -> List ( VersionId, Int, Set VersionId )
+            -> Dict String ( Version, Int, Set VersionId )
+            -> Result String (Dict String ( Version, Int, Set VersionId ))
+        step seen todo dict =
+            case todo of
+                [] ->
+                    Ok dict
+
+                ( ( name, version ), depth, immediateParents ) :: restTodo ->
+                    case Dict.get name dict of
+                        Just ( prevVersion, prevDepth, prevImmediateParents ) ->
+                            if prevVersion == version && prevDepth == depth then
                                 let
-                                    newChildren =
-                                        depends
-                                            |> Dict.keys
-                                            |> List.filter (\childName -> not <| Dict.member childName newDict)
-                                            |> List.filterMap
-                                                (\childName ->
-                                                    case Dict.get childName packages of
-                                                        Just ( selectedVersion, _ ) ->
-                                                            Just ( childName, selectedVersion )
+                                    newImmediateParents =
+                                        Set.intersect prevImmediateParents immediateParents
 
-                                                        Nothing ->
-                                                            -- TODO: ERROR
-                                                            Nothing
-                                                )
+                                    newDict =
+                                        Dict.insert name ( version, depth, newImmediateParents ) dict
                                 in
-                                findAllPackages newChildren newDict
+                                step seen restTodo newDict
 
-                            _ ->
-                                -- TODO: ERROR
-                                newDict
+                            else
+                                Err <| name ++ " has conflicting prevVersion/prevDepth (IMPOSSIBLE)"
 
-            allNeededPackages : List VersionId
-            allNeededPackages =
-                let
-                    directPackages =
-                        packages
-                            |> Dict.toList
-                            |> List.filterMap
-                                (\( name, ( version, isDirect ) ) ->
-                                    if isDirect then
-                                        Just ( name, version )
-
-                                    else
-                                        Nothing
-                                )
-                in
-                findAllPackages directPackages Dict.empty
-                    |> Dict.toList
-
-            ( maybeDepends, maybeErrors ) =
-                allNeededPackages
-                    |> List.map
-                        (\( parentName, version ) ->
-                            let
-                                nameVerStr =
-                                    parentName ++ " " ++ Version.versionToStr version
-                            in
-                            case Dict.get ( parentName, version ) dependsCache of
-                                Just depends ->
-                                    ( Dict.toList depends
-                                        |> List.map
-                                            (\( name, vr ) ->
-                                                ( ( parentName, version ), name, vr )
-                                            )
-                                        |> Just
-                                    , Nothing
-                                    )
-
+                        Nothing ->
+                            case Dict.get ( name, version ) dependsCache of
                                 Nothing ->
-                                    ( Nothing, Just (nameVerStr ++ " not found in dependsCache. (IMPOSSIBLE)") )
-                        )
-                    -- List (Maybe depends, Maybe errors)
-                    |> List.unzip
+                                    Err <| Version.idToStr ( name, version ) ++ " is not in dependsCache (IMPOSSIBLE)"
 
-            allDepends =
-                List.filterMap identity maybeDepends
+                                Just depends ->
+                                    let
+                                        newDict =
+                                            Dict.insert name ( version, depth, immediateParents ) dict
 
-            allErrors =
-                List.filterMap identity maybeErrors
-        in
-        case allErrors of
-            [] ->
-                allDepends
-                    |> List.concat
-                    >> RangeDict.fromVrList
-                    >> RangeDict.insertMustContain allNeededPackages
-                    |> Ok
+                                        newSeen =
+                                            depends
+                                                |> Dict.keys
+                                                |> Set.fromList
+                                                |> Set.union seen
 
-            _ ->
-                Err allErrors
+                                        rAddonTodo =
+                                            depends
+                                                |> Dict.keys
+                                                |> List.filter (\childName -> not <| Set.member childName seen)
+                                                |> List.map
+                                                    (\childName ->
+                                                        case Dict.get childName packages of
+                                                            Just ( childVersion, _ ) ->
+                                                                Ok
+                                                                    ( ( childName, childVersion )
+                                                                    , depth + 1
+                                                                    , Set.singleton ( name, version )
+                                                                    )
+
+                                                            Nothing ->
+                                                                Err <| name ++ " is not in packages (INTERNAL ERROR)"
+                                                    )
+                                                |> ResultExtra.combine
+                                    in
+                                    case rAddonTodo of
+                                        Err error ->
+                                            Err error
+
+                                        Ok addonTodo ->
+                                            step newSeen (restTodo ++ addonTodo) newDict
+    in
+    step initialSeen initialTodo Dict.empty
+
+
+{-| Create RangeDict from dependencies of VersionId:s found by dependsOfSelectedVersions.
+-}
+rangeDictOfDepends : DependsCache -> Dict String ( Version, Bool ) -> Result String RangeDict
+rangeDictOfDepends dependsCache packages =
+    case dependsOfSelectedVersions dependsCache packages of
+        Err error ->
+            Err error
+
+        Ok deps ->
+            let
+                rVrList =
+                    deps
+                        |> Dict.toList
+                        |> List.map
+                            (\( parentName, ( parentVersion, _, _ ) ) ->
+                                case Dict.get ( parentName, parentVersion ) dependsCache of
+                                    Just depends ->
+                                        Dict.toList depends
+                                            |> List.map
+                                                (\( name, vr ) ->
+                                                    ( ( parentName, parentVersion ), name, vr )
+                                                )
+                                            |> Ok
+
+                                    Nothing ->
+                                        let
+                                            nameVerStr =
+                                                parentName ++ " " ++ Version.versionToStr parentVersion
+                                        in
+                                        Err <| nameVerStr ++ " not found in dependsCache. (IMPOSSIBLE)"
+                            )
+                        |> ResultExtra.combine
+                        |> Result.map List.concat
+
+                mustContain =
+                    deps
+                        |> Dict.toList
+                        |> List.map (\( name, ( version, _, _ ) ) -> ( name, version ))
+            in
+            case rVrList of
+                Err error ->
+                    Err error
+
+                Ok vrList ->
+                    vrList
+                        |> RangeDict.fromVrList
+                        |> RangeDict.insertMustContain mustContain
+                        |> Ok
 
 
 

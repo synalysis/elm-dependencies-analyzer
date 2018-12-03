@@ -500,12 +500,8 @@ viewRightSection model =
 viewRightSectionWhenFetchingSucceeded : Model -> Cache -> ViewCache -> List (Html Msg)
 viewRightSectionWhenFetchingSucceeded model cache viewCache =
     case Cache.rangeDictOfDepends cache.depends (allPackages model) of
-        Err errors ->
-            [ H.ul []
-                (errors
-                    |> List.map (\error -> H.li [] [ H.text error ])
-                )
-            ]
+        Err error ->
+            [ H.ul [] [ H.li [] [ H.text error ] ] ]
 
         Ok deps ->
             let
