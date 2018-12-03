@@ -9,6 +9,7 @@ module Range exposing
 
 import Dict exposing (Dict)
 import Html.Styled as H exposing (Html)
+import Result.Extra as ResultExtra
 import Set exposing (Set)
 import Version exposing (Version, VersionId, VersionRange, VersionRangeX)
 
@@ -215,47 +216,86 @@ describeNonIntersectingParents reverseDepends dict =
 describeParentIds : Version.ReverseDepends -> Set VersionId -> String
 describeParentIds reverseDepends parentIds =
     let
-        -- sort by depth
-        sortedParentIds =
+        rMappedParentIds =
             parentIds
                 |> Set.toList
-                |> List.sortBy
+                |> List.map
                     (\parentId ->
                         case Dict.get parentId reverseDepends of
-                            Just ( depth, _, _ ) ->
-                                depth
+                            Just ( depth, _, allParents ) ->
+                                Ok ( parentId, depth, allParents )
 
                             Nothing ->
-                                -- TODO: IMPOSSIBLE
-                                0
+                                Err ()
                     )
-    in
-    case List.head sortedParentIds of
-        Just ( parentName, parentVersion ) ->
-            let
-                parentIdCount =
-                    Set.size parentIds
-            in
-            parentName
-                ++ " "
-                ++ Version.versionToStr parentVersion
-                ++ (if parentIdCount > 1 then
-                        " (and "
-                            ++ String.fromInt (parentIdCount - 1)
-                            ++ " other"
-                            ++ (if parentIdCount > 2 then
-                                    "s"
+                |> ResultExtra.combine
 
-                                else
-                                    ""
-                               )
-                            ++ ")"
+        sortParentIds =
+            List.sortBy (\( _, depth, _ ) -> depth)
+
+        -- filter out children of parentId:s already reported
+        filterParentIds ids =
+            let
+                filter ( parentId, depth, allParents ) ( filtered, seen ) =
+                    let
+                        newSeen =
+                            Set.insert parentId seen
+
+                        filterThis =
+                            Set.intersect allParents seen
+                                |> Set.isEmpty
+                                |> not
+                    in
+                    if filterThis then
+                        ( filtered
+                        , newSeen
+                        )
 
                     else
-                        ""
-                   )
+                        ( filtered ++ [ ( parentId, depth, allParents ) ]
+                        , newSeen
+                        )
 
-        Nothing ->
+                ( result, _ ) =
+                    List.foldl filter ( [], Set.empty ) ids
+            in
+            result
+    in
+    case rMappedParentIds of
+        Ok mappedParentIds ->
+            let
+                filteredParentIds =
+                    filterParentIds <| sortParentIds mappedParentIds
+
+                filteredParentIdCount =
+                    List.length filteredParentIds
+            in
+            case List.head filteredParentIds of
+                Just ( ( parentName, parentVersion ), _, _ ) ->
+                    parentName
+                        ++ " "
+                        ++ Version.versionToStr parentVersion
+                        ++ (if filteredParentIdCount > 1 then
+                                " (and "
+                                    ++ String.fromInt (filteredParentIdCount - 1)
+                                    ++ " other"
+                                    ++ (if filteredParentIdCount > 2 then
+                                            "s"
+
+                                        else
+                                            ""
+                                       )
+                                    ++ ")"
+
+                            else
+                                ""
+                           )
+
+                Nothing ->
+                    -- IMPOSSIBLE
+                    "ERROR"
+
+        Err _ ->
             -- IMPOSSIBLE
             "ERROR"
 
