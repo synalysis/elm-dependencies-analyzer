@@ -134,11 +134,7 @@ of each package, keeping track of reverse dependencies.
       - items with `False` are the VersionId:s which can be used during recursive search
 
   - on success, return reverse dependencies of found VersionId:s
-      - For each VersionId return (minDepth, immediateParents) where
-          - minDepth is minimum depth for this VersionId
-              - initial VersionId:s have minDepth of 0,
-                their immediate dependencies have minDepth of 1, etc.
-          - immediateParents are the immediate reverse dependencies, at (minDepth - 1)
+      - see: Version.ReverseDepends
 
 -}
 reverseDependsFromSelected :
