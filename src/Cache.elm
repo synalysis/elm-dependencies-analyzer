@@ -282,9 +282,11 @@ rangeDictOfDepends dependsCache packages =
                     Err error
 
                 Ok vrList ->
+                    -- TODO: combine these into a single function
                     vrList
                         |> RangeDict.fromVrList
                         |> RangeDict.insertMustContain mustContain
+                        |> RangeDict.setDepends deps
                         |> Ok
 
 
