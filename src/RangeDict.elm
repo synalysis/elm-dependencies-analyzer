@@ -7,7 +7,7 @@ module RangeDict exposing
     , hasRange
     , insertMustContain
     , ranges
-    , setDepends
+    , setReverseDepends
     )
 
 import Dict exposing (Dict)
@@ -28,8 +28,8 @@ type RangeDict
         { ranges : Dict String Range
         , mustContain : Dict String Version
 
-        -- TODO WIP: see Cache.dependsOfSelectedVersions
-        , depends : Dict VersionId ( Int, Set VersionId )
+        -- TODO WIP
+        , reverseDepends : Version.ReverseDepends
         }
 
 
@@ -44,7 +44,7 @@ empty =
     RangeDict
         { ranges = Dict.empty
         , mustContain = Dict.empty
-        , depends = Dict.empty
+        , reverseDepends = Dict.empty
         }
 
 
@@ -65,9 +65,9 @@ insertMustContain parentIds (RangeDict rangeDict) =
         }
 
 
-setDepends : Dict VersionId ( Int, Set VersionId ) -> RangeDict -> RangeDict
-setDepends depends (RangeDict rangeDict) =
-    RangeDict { rangeDict | depends = depends }
+setReverseDepends : Version.ReverseDepends -> RangeDict -> RangeDict
+setReverseDepends reverseDepends (RangeDict rangeDict) =
+    RangeDict { rangeDict | reverseDepends = reverseDepends }
 
 
 {-| Create new RangeDict from association list of (parentId, name, VersionRange) tuples.
@@ -135,7 +135,7 @@ getProblems (RangeDict rangeDict) =
                     maybeMustContainVersion =
                         Dict.get name rangeDict.mustContain
                 in
-                Range.getVersionInRangeProblem rangeDict.depends name maybeMustContainVersion range
+                Range.getVersionInRangeProblem rangeDict.reverseDepends name maybeMustContainVersion range
             )
 
 

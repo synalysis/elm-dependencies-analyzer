@@ -1,5 +1,6 @@
 module Version exposing
-    ( Version
+    ( ReverseDepends
+    , Version
     , VersionId
     , VersionRange
     , VersionRangeX(..)
@@ -21,6 +22,7 @@ module Version exposing
 import Dict exposing (Dict)
 import Json.Decode as JD
 import Parser as P exposing ((|.), (|=))
+import Set exposing (Set)
 
 
 
@@ -49,6 +51,12 @@ type VersionRangeX
 
 type alias VersionId =
     ( String, Version )
+
+
+{-| see Cache.reverseDependsFromSelected
+-}
+type alias ReverseDepends =
+    Dict VersionId ( Int, Set VersionId )
 
 
 

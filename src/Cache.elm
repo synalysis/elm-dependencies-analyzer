@@ -133,7 +133,7 @@ of each package, keeping track of reverse dependencies.
       - items with `True` are the initial VersionId:s
       - items with `False` are the VersionId:s which can be used during recursive search
 
-  - on success, return Dict of found VersionId:s
+  - on success, return reverse dependencies of found VersionId:s
       - For each VersionId return (minDepth, immediateParents) where
           - minDepth is minimum depth for this VersionId
               - initial VersionId:s have minDepth of 0,
@@ -141,11 +141,11 @@ of each package, keeping track of reverse dependencies.
           - immediateParents are the immediate reverse dependencies, at (minDepth - 1)
 
 -}
-dependsOfSelectedVersions :
+reverseDependsFromSelected :
     DependsCache
     -> Dict String ( Version, Bool )
-    -> Result String (Dict VersionId ( Int, Set VersionId ))
-dependsOfSelectedVersions dependsCache packages =
+    -> Result String Version.ReverseDepends
+reverseDependsFromSelected dependsCache packages =
     let
         initialVersionIds =
             packages
@@ -171,8 +171,8 @@ dependsOfSelectedVersions dependsCache packages =
         step :
             Set String
             -> List ( VersionId, Int, Set VersionId )
-            -> Dict VersionId ( Int, Set VersionId )
-            -> Result String (Dict VersionId ( Int, Set VersionId ))
+            -> Version.ReverseDepends
+            -> Result String Version.ReverseDepends
         step seen todo dict =
             case todo of
                 [] ->
@@ -243,11 +243,11 @@ dependsOfSelectedVersions dependsCache packages =
     step initialSeen initialTodo Dict.empty
 
 
-{-| Create RangeDict from dependencies of VersionId:s found by dependsOfSelectedVersions.
+{-| Create RangeDict from dependencies of VersionId:s found by reverseDependsFromSelected.
 -}
 rangeDictOfDepends : DependsCache -> Dict String ( Version, Bool ) -> Result String RangeDict
 rangeDictOfDepends dependsCache packages =
-    case dependsOfSelectedVersions dependsCache packages of
+    case reverseDependsFromSelected dependsCache packages of
         Err error ->
             Err error
 
@@ -286,7 +286,7 @@ rangeDictOfDepends dependsCache packages =
                     vrList
                         |> RangeDict.fromVrList
                         |> RangeDict.insertMustContain mustContain
-                        |> RangeDict.setDepends deps
+                        |> RangeDict.setReverseDepends deps
                         |> Ok
 
 

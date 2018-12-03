@@ -99,18 +99,18 @@ intersectVr ( parentId, vr ) (Range range) =
 
 -}
 getVersionInRangeProblem :
-    Dict VersionId ( Int, Set VersionId )
+    Version.ReverseDepends
     -> String
     -> Maybe Version
     -> Range
     -> List (Html msg)
-getVersionInRangeProblem depends name maybeVersion (Range range) =
+getVersionInRangeProblem reverseDepends name maybeVersion (Range range) =
     case range.versionRangeX of
         Version.Empty ->
             [ H.li []
                 [ H.text name
                 , H.ul []
-                    (describeNonIntersectingParents depends range.intersectSources)
+                    (describeNonIntersectingParents reverseDepends range.intersectSources)
                 ]
             ]
 
@@ -146,7 +146,7 @@ getVersionInRangeProblem depends name maybeVersion (Range range) =
                                                 [ H.text
                                                     (Version.versionRangeToStr " <= v < " parentVr
                                                         ++ " needed by "
-                                                        ++ describeParentIds depends parentIds
+                                                        ++ describeParentIds reverseDepends parentIds
                                                     )
                                                 ]
                                         )
@@ -159,11 +159,8 @@ getVersionInRangeProblem depends name maybeVersion (Range range) =
 -- PROBLEMS - INTERNAL HELPERS
 
 
-describeNonIntersectingParents :
-    Dict VersionId ( Int, Set VersionId )
-    -> Dict VersionRange (Set VersionId)
-    -> List (Html msg)
-describeNonIntersectingParents depends dict =
+describeNonIntersectingParents : Version.ReverseDepends -> Dict VersionRange (Set VersionId) -> List (Html msg)
+describeNonIntersectingParents reverseDepends dict =
     let
         dictAsList =
             Dict.toList dict
@@ -196,7 +193,7 @@ describeNonIntersectingParents depends dict =
                     [ H.text
                         (Version.versionRangeToStr " <= v < " vrA
                             ++ " needed by "
-                            ++ describeParentIds depends idsA
+                            ++ describeParentIds reverseDepends idsA
                         )
                     , H.ul []
                         (sublist
@@ -206,7 +203,7 @@ describeNonIntersectingParents depends dict =
                                         [ H.text
                                             (Version.versionRangeToStr " <= v < " vrB
                                                 ++ " needed by "
-                                                ++ describeParentIds depends idsB
+                                                ++ describeParentIds reverseDepends idsB
                                             )
                                         ]
                                 )
@@ -215,11 +212,8 @@ describeNonIntersectingParents depends dict =
             )
 
 
-describeParentIds :
-    Dict VersionId ( Int, Set VersionId )
-    -> Set VersionId
-    -> String
-describeParentIds depends parentIds =
+describeParentIds : Version.ReverseDepends -> Set VersionId -> String
+describeParentIds reverseDepends parentIds =
     let
         -- sort by depth
         sortedParentIds =
@@ -227,7 +221,7 @@ describeParentIds depends parentIds =
                 |> Set.toList
                 |> List.sortBy
                     (\parentId ->
-                        case Dict.get parentId depends of
+                        case Dict.get parentId reverseDepends of
                             Just ( depth, _ ) ->
                                 depth
 
