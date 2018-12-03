@@ -53,17 +53,20 @@ type alias VersionId =
     ( String, Version )
 
 
-{-| see Cache.reverseDependsFromSelected
+{-| Reverse dependencies of VersionId:s.
 
-  - (minDepth, immediateParents)
+  - see Cache.reverseDependsFromSelected
+
+  - (minDepth, immediateParents, allParents)
       - minDepth - minimum depth for this VersionId
           - root VersionId:s have minDepth of 0,
             their immediate dependencies have minDepth of 1, etc.
       - immediateParents - immediate reverse dependencies, at (minDepth - 1)
+      - allParents - set of all parents, found recursively
 
 -}
 type alias ReverseDepends =
-    Dict VersionId ( Int, Set VersionId )
+    Dict VersionId ( Int, Set VersionId, Set VersionId )
 
 
 

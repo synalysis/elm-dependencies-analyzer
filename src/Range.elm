@@ -222,7 +222,7 @@ describeParentIds reverseDepends parentIds =
                 |> List.sortBy
                     (\parentId ->
                         case Dict.get parentId reverseDepends of
-                            Just ( depth, _ ) ->
+                            Just ( depth, _, _ ) ->
                                 depth
 
                             Nothing ->

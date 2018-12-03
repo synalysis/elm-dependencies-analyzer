@@ -157,7 +157,7 @@ reverseDependsFromSelected dependsCache packages =
 
         initialTodo =
             initialVersionIds
-                |> List.map (\id -> ( id, 0, Set.empty ))
+                |> List.map (\id -> ( id, 0, ( Set.empty, Set.empty ) ))
 
         initialSeen =
             initialVersionIds
@@ -166,7 +166,8 @@ reverseDependsFromSelected dependsCache packages =
 
         step :
             Set String
-            -> List ( VersionId, Int, Set VersionId )
+            -- TODO: perhaps use record here
+            -> List ( VersionId, Int, ( Set VersionId, Set VersionId ) )
             -> Version.ReverseDepends
             -> Result String Version.ReverseDepends
         step seen todo dict =
@@ -174,16 +175,22 @@ reverseDependsFromSelected dependsCache packages =
                 [] ->
                     Ok dict
 
-                ( ( name, version ), depth, immediateParents ) :: restTodo ->
+                ( ( name, version ), depth, ( immediateParents, allParents ) ) :: restTodo ->
                     case Dict.get ( name, version ) dict of
-                        Just ( prevDepth, prevImmediateParents ) ->
+                        Just ( prevDepth, prevImmediateParents, prevAllParents ) ->
                             if prevDepth == depth then
                                 let
                                     newImmediateParents =
                                         Set.intersect prevImmediateParents immediateParents
 
+                                    newAllParents =
+                                        Set.intersect prevAllParents allParents
+
                                     newDict =
-                                        Dict.insert ( name, version ) ( depth, newImmediateParents ) dict
+                                        Dict.insert
+                                            ( name, version )
+                                            ( depth, newImmediateParents, newAllParents )
+                                            dict
                                 in
                                 step seen restTodo newDict
 
@@ -202,7 +209,10 @@ reverseDependsFromSelected dependsCache packages =
                                 Just depends ->
                                     let
                                         newDict =
-                                            Dict.insert ( name, version ) ( depth, immediateParents ) dict
+                                            Dict.insert
+                                                ( name, version )
+                                                ( depth, immediateParents, allParents )
+                                                dict
 
                                         newSeen =
                                             depends
@@ -218,10 +228,19 @@ reverseDependsFromSelected dependsCache packages =
                                                     (\childName ->
                                                         case Dict.get childName packages of
                                                             Just ( childVersion, _ ) ->
+                                                                let
+                                                                    childImmediateParents =
+                                                                        Set.singleton ( name, version )
+
+                                                                    childAllParents =
+                                                                        Set.union allParents childImmediateParents
+                                                                in
                                                                 Ok
                                                                     ( ( childName, childVersion )
                                                                     , depth + 1
-                                                                    , Set.singleton ( name, version )
+                                                                    , ( childImmediateParents
+                                                                      , childAllParents
+                                                                      )
                                                                     )
 
                                                             Nothing ->
