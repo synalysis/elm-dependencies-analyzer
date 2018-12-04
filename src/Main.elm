@@ -19,7 +19,7 @@ import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
-import Package exposing (ExtraPackage, Package, PackageType(..))
+import Package exposing (Package)
 import RangeDict exposing (RangeDict)
 import SortableDict exposing (SortableDict)
 import StepResult
@@ -37,7 +37,6 @@ type alias Model =
     , inputJson : String
     , mouseOverVersion : Maybe VersionId
     , packages : SortableDict String Package
-    , extraPackages : Dict String ExtraPackage
 
     -- WIP
     , fetchingCache : Cache.FetchingCache
@@ -60,7 +59,7 @@ type Msg
     | GotFileContents String
     | AnalyzeButtonClick
     | Fetched Cache.FetchedMsg
-    | VersionClick PackageType String Version
+    | VersionClick String Version
     | IsDirectCheckboxClick String
     | MouseOverVersion String Version
     | MouseOutVersion String Version
@@ -89,7 +88,6 @@ init _ =
       , inputJson = ""
       , mouseOverVersion = Nothing
       , packages = SortableDict.empty
-      , extraPackages = Dict.empty
       , fetchingCache = Cache.newFetchingCache
       }
     , Cmd.none
@@ -124,27 +122,11 @@ update msg model =
         Fetched fetched ->
             updateFetched model fetched
 
-        VersionClick packageType name version ->
+        VersionClick name version ->
             let
-                ( newPackages, newExtraPackages ) =
-                    case packageType of
-                        Direct ->
-                            ( model.packages
-                                |> (selectedVersionOfPackages name).set version
-                            , model.extraPackages
-                            )
-
-                        Indirect ->
-                            ( model.packages
-                                |> (selectedVersionOfPackages name).set version
-                            , model.extraPackages
-                            )
-
-                        Extra ->
-                            ( model.packages
-                            , model.extraPackages
-                                |> (selectedVersionOfExtraPackages name).set version
-                            )
+                newPackages =
+                    model.packages
+                        |> (selectedVersionOfPackages name).set version
 
                 newState =
                     case model.state of
@@ -158,7 +140,6 @@ update msg model =
             ( { model
                 | state = newState
                 , packages = newPackages
-                , extraPackages = newExtraPackages
               }
             , Cmd.none
             )
@@ -224,20 +205,32 @@ updateAnalyzeButtonClick model =
             , Cmd.none
             )
 
-        Ok packages ->
+        Ok appDepends ->
             let
                 addonPackageCache =
-                    packages
-                        |> SortableDict.toList
+                    appDepends
                         |> List.map
-                            (\( name, package ) ->
+                            (\( name, version, isDirect ) ->
                                 ( name
                                 , { allVersions = NotFetched
-                                  , minVersion = package.installedVersion
+                                  , minVersion = version
                                   }
                                 )
                             )
                         |> Dict.fromList
+
+                newPackages =
+                    appDepends
+                        |> List.map
+                            (\( name, version, isDirect ) ->
+                                ( name
+                                , { isDirect = isDirect
+                                  , jsonVersion = Just version
+                                  , selectedVersion = version
+                                  }
+                                )
+                            )
+                        |> SortableDict.fromList
 
                 newPackageCache =
                     Dict.merge
@@ -267,7 +260,7 @@ updateAnalyzeButtonClick model =
                         Nothing ->
                             case Cache.validate newFetchingCache of
                                 Ok cache ->
-                                    ( FetchingSucceeded cache (ViewCache.new packages cache)
+                                    ( FetchingSucceeded cache (ViewCache.new newPackages cache)
                                     , Cmd.none
                                     )
 
@@ -279,7 +272,7 @@ updateAnalyzeButtonClick model =
                                     )
             in
             ( { model
-                | packages = packages
+                | packages = newPackages
                 , fetchingCache = newFetchingCache
                 , state = newState
               }
@@ -341,30 +334,29 @@ updateFetched model fetched =
                                     , depends = Dict.insert ( name, version ) (Succeeded versionRanges) model.fetchingCache.depends
                                     }
 
-                newExtraPackages =
+                newPackages =
                     case fetched of
                         Cache.FetchedVersions name (Ok packageVersions) ->
                             if not (SortableDict.member name model.packages) then
-                                if not (Dict.member name model.extraPackages) then
-                                    case ListExtra.last <| Dict.keys <| packageVersions of
-                                        Just lastestVersion ->
-                                            Dict.insert
-                                                name
-                                                { selectedVersion = lastestVersion }
-                                                model.extraPackages
+                                case ListExtra.last <| Dict.keys <| packageVersions of
+                                    Just latestVersion ->
+                                        SortableDict.insert
+                                            name
+                                            { isDirect = False
+                                            , jsonVersion = Nothing
+                                            , selectedVersion = latestVersion
+                                            }
+                                            model.packages
 
-                                        Nothing ->
-                                            -- IMPOSSIBLE
-                                            model.extraPackages
-
-                                else
-                                    model.extraPackages
+                                    Nothing ->
+                                        -- TODO IMPOSSIBLE
+                                        model.packages
 
                             else
-                                model.extraPackages
+                                model.packages
 
                         _ ->
-                            model.extraPackages
+                            model.packages
 
                 maybeNextCmd =
                     Cache.fetchNextThing newFetchingCache
@@ -389,7 +381,7 @@ updateFetched model fetched =
             in
             ( { model
                 | fetchingCache = newFetchingCache
-                , extraPackages = newExtraPackages
+                , packages = newPackages
                 , state = newState
               }
             , Cmd.map Fetched <| Maybe.withDefault Cmd.none maybeNextCmd
@@ -505,7 +497,17 @@ viewRightSection model =
 
 viewRightSectionWhenFetchingSucceeded : Model -> Cache -> ViewCache -> List (Html Msg)
 viewRightSectionWhenFetchingSucceeded model cache viewCache =
-    case Cache.rangeDictOfDepends cache.depends (allPackages model) of
+    let
+        -- TODO: maybe merge into rangeDictOfDepends
+        allPackages : Dict String ( Version, Bool )
+        allPackages =
+            model.packages
+                -- TODO: I need SortableDict.toDict
+                |> SortableDict.toList
+                |> Dict.fromList
+                |> Dict.map (\_ package -> ( package.selectedVersion, package.isDirect ))
+    in
+    case Cache.rangeDictOfDepends cache.depends allPackages of
         Err error ->
             [ H.ul [] [ H.li [] [ H.text error ] ] ]
 
@@ -550,32 +552,35 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
 viewPackages : Model -> Cache -> ViewCache -> RangeDict -> List (Html Msg)
 viewPackages model cache viewCache deps =
     let
+        basePackagesToShow =
+            model.packages
+                |> SortableDict.toList
+                |> List.filterMap
+                    (\( name, package ) ->
+                        case package.jsonVersion of
+                            Just jsonVersion ->
+                                Just ( name, package )
+
+                            Nothing ->
+                                Nothing
+                    )
+
         extraPackagesToShow =
             Dict.diff
                 (RangeDict.ranges deps)
-                (model.packages |> SortableDict.toList |> Dict.fromList)
+                (Dict.fromList basePackagesToShow)
                 |> Dict.toList
     in
     [ H.table []
-        ((model.packages
-            |> SortableDict.toList
+        ((basePackagesToShow
             |> List.concatMap
                 (\( name, package ) ->
-                    let
-                        packageType =
-                            if package.isDirect then
-                                Direct
-
-                            else
-                                Indirect
-                    in
                     viewPackage
                         { model = model
                         , cache = cache
                         , viewCache = viewCache
                         , deps = deps
-                        , packageType = packageType
-                        , selectedVersion = package.selectedVersion
+                        , package = package
                         , name = name
                         }
                 )
@@ -584,20 +589,19 @@ viewPackages model cache viewCache deps =
             ++ (extraPackagesToShow
                     |> List.concatMap
                         (\( name, _ ) ->
-                            case Dict.get name model.extraPackages of
-                                Just extraPackage ->
+                            case SortableDict.get name model.packages of
+                                Just package ->
                                     viewPackage
                                         { model = model
                                         , cache = cache
                                         , viewCache = viewCache
                                         , deps = deps
-                                        , packageType = Extra
-                                        , selectedVersion = extraPackage.selectedVersion
+                                        , package = package
                                         , name = name
                                         }
 
                                 Nothing ->
-                                    -- IMPOSSIBLE
+                                    -- TODO IMPOSSIBLE
                                     [ H.text "ERROR" ]
                         )
                )
@@ -616,12 +620,11 @@ viewPackage :
     , cache : Cache
     , viewCache : ViewCache
     , deps : RangeDict
-    , packageType : PackageType
-    , selectedVersion : Version
+    , package : Package
     , name : String
     }
     -> List (Html Msg)
-viewPackage { model, cache, viewCache, deps, packageType, selectedVersion, name } =
+viewPackage { model, cache, viewCache, deps, package, name } =
     let
         packageLink =
             if String.left 8 name == "example/" then
@@ -636,10 +639,10 @@ viewPackage { model, cache, viewCache, deps, packageType, selectedVersion, name 
                     [ H.text "src" ]
 
         packageNeeded =
-            packageType == Direct || RangeDict.hasRange name deps
+            package.isDirect || RangeDict.hasRange name deps
 
         nameStyleColor =
-            if packageType == Direct then
+            if package.isDirect then
                 []
 
             else
@@ -660,8 +663,8 @@ viewPackage { model, cache, viewCache, deps, packageType, selectedVersion, name 
             [ packageLink
             , H.input
                 [ A.type_ "checkbox"
-                , A.checked (packageType == Direct)
-                , A.disabled (packageType == Extra)
+                , A.checked package.isDirect
+                , A.disabled (package.jsonVersion == Nothing)
                 , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
                 ]
                 []
@@ -672,8 +675,7 @@ viewPackage { model, cache, viewCache, deps, packageType, selectedVersion, name 
                 { model = model
                 , cache = cache
                 , viewCache = viewCache
-                , packageType = packageType
-                , selectedVersion = selectedVersion
+                , package = package
                 , packageNeeded = packageNeeded
                 , name = name
                 }
@@ -685,13 +687,12 @@ viewPackageVersions :
     { model : Model
     , cache : Cache
     , viewCache : ViewCache
-    , packageType : PackageType
-    , selectedVersion : Version
+    , package : Package
     , packageNeeded : Bool
     , name : String
     }
     -> List (Html Msg)
-viewPackageVersions { model, cache, viewCache, packageType, selectedVersion, packageNeeded, name } =
+viewPackageVersions { model, cache, viewCache, package, packageNeeded, name } =
     case Dict.get name cache.versions of
         Just versions ->
             versions
@@ -701,8 +702,7 @@ viewPackageVersions { model, cache, viewCache, packageType, selectedVersion, pac
                             { model = model
                             , cache = cache
                             , viewCache = viewCache
-                            , packageType = packageType
-                            , selectedVersion = selectedVersion
+                            , package = package
                             , packageNeeded = packageNeeded
                             , name = name
                             , version = version
@@ -717,14 +717,13 @@ viewVersion :
     { model : Model
     , cache : Cache
     , viewCache : ViewCache
-    , packageType : PackageType
-    , selectedVersion : Version
+    , package : Package
     , packageNeeded : Bool
     , name : String
     , version : Version
     }
     -> Html Msg
-viewVersion { model, cache, viewCache, packageType, selectedVersion, packageNeeded, name, version } =
+viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
     let
         versionHasMouseOver =
             model.mouseOverVersion == Just ( name, version )
@@ -758,11 +757,11 @@ viewVersion { model, cache, viewCache, packageType, selectedVersion, packageNeed
             ]
 
         styleColor =
-            if packageType /= Direct then
-                [ C.color (C.hex "888") ]
+            if package.isDirect then
+                [ C.color (C.hex "000") ]
 
             else
-                [ C.color (C.hex "000") ]
+                [ C.color (C.hex "888") ]
 
         styleBorder =
             if versionHasMouseOver then
@@ -777,7 +776,7 @@ viewVersion { model, cache, viewCache, packageType, selectedVersion, packageNeed
                 [ C.border3 (C.px 2) C.solid (C.hex "#0000") ]
 
         styleBgColor =
-            if version == selectedVersion && packageNeeded then
+            if version == package.selectedVersion && packageNeeded then
                 [ C.backgroundColor (C.hex "CCE") ]
 
             else if directPackagesAreCompatible == Just True && isCompatibleWithDirect == Just False then
@@ -810,7 +809,7 @@ viewVersion { model, cache, viewCache, packageType, selectedVersion, packageNeed
              , HE.onMouseOut (MouseOutVersion name version)
              ]
                 ++ (if packageNeeded then
-                        [ HE.onClick (VersionClick packageType name version) ]
+                        [ HE.onClick (VersionClick name version) ]
 
                     else
                         []
@@ -827,59 +826,19 @@ viewVersion { model, cache, viewCache, packageType, selectedVersion, packageNeed
 
 {-| decodes dependencies from application elm.json
 -}
-applicationDependenciesDecoder : JD.Decoder (SortableDict String Package)
+applicationDependenciesDecoder : JD.Decoder (List ( String, Version, Bool ))
 applicationDependenciesDecoder =
     let
-        helper : Bool -> List VersionId -> List ( String, Package )
+        helper : Bool -> List VersionId -> List ( String, Version, Bool )
         helper isDirect =
-            List.map
-                (\( name, version ) ->
-                    ( name
-                    , { isDirect = isDirect
-                      , installedVersion = version
-                      , selectedVersion = version
-                      }
-                    )
-                )
+            List.map (\( name, version ) -> ( name, version, isDirect ))
     in
     JF.requireAt [ "dependencies", "direct" ] (JD.keyValuePairs Version.versionDecoder) <|
         \direct ->
             JF.requireAt [ "dependencies", "indirect" ] (JD.keyValuePairs Version.versionDecoder) <|
                 \indirect ->
                     JD.succeed
-                        (helper True direct
-                            ++ helper False indirect
-                            |> SortableDict.fromList
-                        )
-
-
-
--- MISC HELPERS
-
-
-{-| TODO: maybe better name
--}
-allPackages : Model -> Dict String ( Version, Bool )
-allPackages model =
-    let
-        packagesDict =
-            model.packages
-                -- TODO: I need SortableDict.toDict
-                |> SortableDict.toList
-                |> Dict.fromList
-                |> Dict.map
-                    (\_ package ->
-                        ( package.selectedVersion, package.isDirect )
-                    )
-
-        extraPackagesDict =
-            model.extraPackages
-                |> Dict.map
-                    (\_ extraPackage ->
-                        ( extraPackage.selectedVersion, False )
-                    )
-    in
-    Dict.union packagesDict extraPackagesDict
+                        (helper True direct ++ helper False indirect)
 
 
 
@@ -907,17 +866,6 @@ modifyIsDirectOfPackages :
     -> SortableDict String Package
 modifyIsDirectOfPackages name fn =
     Monocle.Optional.modify (isDirectOfPackages name) fn
-
-
-
--- MONOCLE - OF EXTRA PACKAGES
-
-
-selectedVersionOfExtraPackages : String -> Optional (Dict String ExtraPackage) Version
-selectedVersionOfExtraPackages name =
-    Monocle.Common.dict name
-        |> Monocle.Compose.optionalWithLens
-            (Lens .selectedVersion (\b a -> { a | selectedVersion = b }))
 
 
 

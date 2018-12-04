@@ -1,8 +1,4 @@
-module Package exposing
-    ( ExtraPackage
-    , Package
-    , PackageType(..)
-    )
+module Package exposing (Package)
 
 import Dict exposing (Dict)
 import Version exposing (Version, VersionRange)
@@ -14,17 +10,6 @@ import Version exposing (Version, VersionRange)
 
 type alias Package =
     { isDirect : Bool
-    , installedVersion : Version
+    , jsonVersion : Maybe Version
     , selectedVersion : Version
     }
-
-
-type alias ExtraPackage =
-    { selectedVersion : Version
-    }
-
-
-type PackageType
-    = Direct
-    | Indirect
-    | Extra
