@@ -303,11 +303,7 @@ updateFetched model fetched =
                                     { packages =
                                         model.fetchingCache.packages
                                             |> (Cache.allVersionsOfFetchingPackageCache name).set
-                                                (packageVersions
-                                                    |> Dict.toList
-                                                    |> List.map (\( version, pv ) -> ( version, pv.timestamp ))
-                                                    |> Succeeded
-                                                )
+                                                (Succeeded packageVersions)
                                     , depends = model.fetchingCache.depends
                                     }
                                         |> addMissingVersionsToDependsCache
@@ -338,7 +334,7 @@ updateFetched model fetched =
                     case fetched of
                         Cache.FetchedVersions name (Ok packageVersions) ->
                             if not (SortableDict.member name model.packages) then
-                                case ListExtra.last <| Dict.keys <| packageVersions of
+                                case ListExtra.last <| List.map Tuple.first <| packageVersions of
                                     Just latestVersion ->
                                         SortableDict.insert
                                             name

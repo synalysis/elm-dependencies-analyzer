@@ -83,18 +83,12 @@ type FetchedValue a
     | Failed
 
 
-type alias PackageVersion =
-    { timestamp : Int
-    , depends : FetchedValue (Dict String VersionRange)
-    }
-
-
 
 -- TYPES - MSG
 
 
 type FetchedMsg
-    = FetchedVersions String (Result Http.Error (Dict Version PackageVersion))
+    = FetchedVersions String (Result Http.Error (List ( Version, Int )))
     | FetchedDepends String Version (Result Http.Error (Dict String VersionRange))
 
 
@@ -523,7 +517,7 @@ packageDependenciesDecoder =
 
 {-| decodes <https://package.elm-lang.org/packages/AUTHOR/PROJECT/releases.json>
 -}
-packageVersionsDecoder : JD.Decoder (Dict Version PackageVersion)
+packageVersionsDecoder : JD.Decoder (List ( Version, Int ))
 packageVersionsDecoder =
     JD.keyValuePairs JD.int
         |> JD.andThen
@@ -532,19 +526,15 @@ packageVersionsDecoder =
                     decoder list_ =
                         case list_ of
                             [] ->
-                                JD.succeed Dict.empty
+                                JD.succeed []
 
                             ( versionStr, timestamp ) :: rest ->
                                 case P.run Version.versionStrParser (String.replace "." ":" versionStr) of
                                     Ok version ->
                                         decoder rest
                                             |> JD.andThen
-                                                (Dict.insert
-                                                    version
-                                                    { timestamp = timestamp
-                                                    , depends = NotFetched
-                                                    }
-                                                    >> JD.succeed
+                                                (\restDecoded ->
+                                                    JD.succeed <| ( version, timestamp ) :: restDecoded
                                                 )
 
                                     Err _ ->
