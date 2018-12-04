@@ -469,13 +469,12 @@ viewLeftSection model =
         ]
         []
     , H.br [] []
-    , H.button [ HE.onClick ExampleClick ] [ H.text "Load example" ]
-    , H.text " "
     , H.button [ HE.onClick OpenFileClick ] [ H.text "Open File ..." ]
     , H.text " "
     , H.button [ HE.onClick AnalyzeButtonClick ] [ H.text "Analyze" ]
-    , H.br [] []
-    , H.br [] []
+    , H.hr [] []
+    , H.button [ HE.onClick ExampleClick ] [ H.text "Load example" ]
+    , H.text " "
     , H.a
         [ A.href "https://github.com/malaire/elm-dependencies-analyzer"
         , A.target "_blank"
