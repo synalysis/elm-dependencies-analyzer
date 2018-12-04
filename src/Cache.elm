@@ -315,6 +315,12 @@ rangeDictOfDepends dependsCache packages =
 validate : FetchingCache -> Result (List String) Cache
 validate fetchingCache =
     let
+        -- check that sets are equal, i.e. have exact same members
+        -- TODO: perhaps move to some utility package
+        setEqual : Set comparable -> Set comparable -> Bool
+        setEqual a b =
+            (Set.size a == Set.size b) && (Set.size a == (Set.size <| Set.union a b))
+
         newVersionsWithErrors : ( Dict String (List ( Version, Int )), List String )
         newVersionsWithErrors =
             fetchingCache.packages
@@ -398,8 +404,7 @@ validate fetchingCache =
                         |> Dict.keys
                         |> Set.fromList
             in
-            (Set.size idsFromNewVersions == Set.size idsFromNewDepends)
-                && (Set.size idsFromNewVersions == (Set.size <| Set.union idsFromNewVersions idsFromNewDepends))
+            setEqual idsFromNewVersions idsFromNewDepends
 
         -- Check that all childNames in `newDepends` are present in `newVersions`
         validateDependsNames :
