@@ -475,6 +475,13 @@ viewLeftSection model =
     , H.text " "
     , H.button [ HE.onClick AnalyzeButtonClick ] [ H.text "Analyze" ]
     , H.br [] []
+    , H.br [] []
+    , H.a
+        [ A.href "https://github.com/malaire/elm-dependencies-analyzer"
+        , A.target "_blank"
+        , A.css [ C.textDecoration C.none, C.fontSize C.smaller ]
+        ]
+        [ H.text "source code @ github" ]
     ]
 
 
