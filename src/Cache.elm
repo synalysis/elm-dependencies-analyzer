@@ -238,7 +238,7 @@ reverseDependsFromSelected dependsCache packages =
                                                                     )
 
                                                             Nothing ->
-                                                                Err <| name ++ " is not in packages (INTERNAL ERROR)"
+                                                                Err <| childName ++ " is not in packages (INTERNAL ERROR)"
                                                     )
                                                 |> ResultExtra.combine
                                     in
