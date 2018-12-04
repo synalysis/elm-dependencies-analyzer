@@ -44,3 +44,20 @@ For each package the version in `elm.json` and all newer versions will be shown.
   - If you would find it useful to also support package `elm.json`, please open an issue or send me a message.
 - Test dependencies are ignored.
   - I need to think a bit more how I want to implement this.
+
+## Building
+
+1) [Install Elm 0.19](https://guide.elm-lang.org/install.html) 
+2) Run `elm make src/*.elm --optimize --output=elm.js` in project base directory.
+   - Optionally you can also run minifier like `uglifyjs`.
+     See included `make.sh` for some building options.
+     (This is just a generic script for running `elm make`, not specific to this project.)
+3) Open `index.html` in browser.
+
+### Backend cache
+
+- The backend cache to be used is defined by `cacheUrl` in `Cache.elm`.
+- My cache at `https://www.markuslaire.com/github/elm-dependencies-analyzer/cache.php?` is available
+  publicly for now. I intend to keep this cache public, but if I start getting too much traffic,
+  I could make it private.
+- The backend script is included in this repository as `cache.php`, so you could also just run your own cache.
