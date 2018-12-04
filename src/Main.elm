@@ -297,19 +297,34 @@ updateFetched model fetched =
                                     }
 
                                 Ok versionRanges ->
-                                    { packages =
-                                        Dict.union
-                                            fetchingCache.packages
-                                            (versionRanges
+                                    let
+                                        addonPackageCache =
+                                            versionRanges
                                                 |> Dict.map
                                                     (\n ( min, max ) ->
                                                         { allVersions = NotFetched
                                                         , minVersion = min
                                                         }
                                                     )
-                                            )
+
+                                        newPackageCache =
+                                            Dict.merge
+                                                Dict.insert
+                                                (\mergeName old new ->
+                                                    Dict.insert mergeName
+                                                        { allVersions = old.allVersions
+                                                        , minVersion = min old.minVersion new.minVersion
+                                                        }
+                                                )
+                                                Dict.insert
+                                                fetchingCache.packages
+                                                addonPackageCache
+                                                Dict.empty
+                                    in
+                                    { packages = newPackageCache
                                     , depends = Dict.insert ( name, version ) (Succeeded versionRanges) fetchingCache.depends
                                     }
+                                        |> addMissingVersionsToDependsCache
 
                 newPackages =
                     case fetched of
