@@ -37,16 +37,13 @@ type alias Model =
     , inputJson : String
     , mouseOverVersion : Maybe VersionId
     , packages : SortableDict String Package
-
-    -- WIP
-    , fetchingCache : Cache.FetchingCache
     }
 
 
 type ModelState
     = NothingAnalyzed
     | JsonParsingError String
-    | Fetching Int
+    | Fetching Int Cache.FetchingCache
     | FetchingSucceeded Cache ViewCache
     | FetchingFailed (List (Html Msg))
 
@@ -88,7 +85,6 @@ init _ =
       , inputJson = ""
       , mouseOverVersion = Nothing
       , packages = SortableDict.empty
-      , fetchingCache = Cache.newFetchingCache
       }
     , Cmd.none
     )
@@ -207,7 +203,7 @@ updateAnalyzeButtonClick model =
 
         Ok appDepends ->
             let
-                addonPackageCache =
+                newPackageCache =
                     appDepends
                         |> List.map
                             (\( name, version, isDirect ) ->
@@ -232,30 +228,16 @@ updateAnalyzeButtonClick model =
                             )
                         |> SortableDict.fromList
 
-                newPackageCache =
-                    Dict.merge
-                        Dict.insert
-                        (\name old new ->
-                            Dict.insert name
-                                { allVersions = old.allVersions
-                                , minVersion = new.minVersion
-                                }
-                        )
-                        Dict.insert
-                        model.fetchingCache.packages
-                        addonPackageCache
-                        Dict.empty
-
                 newFetchingCache =
                     { packages = newPackageCache
-                    , depends = model.fetchingCache.depends
+                    , depends = Dict.empty
                     }
                         |> addMissingVersionsToDependsCache
 
                 ( newState, nextCmd ) =
                     case Cache.fetchNextThing newFetchingCache of
                         Just cmd ->
-                            ( Fetching 0, cmd )
+                            ( Fetching 0 newFetchingCache, cmd )
 
                         Nothing ->
                             case Cache.validate newFetchingCache of
@@ -273,7 +255,6 @@ updateAnalyzeButtonClick model =
             in
             ( { model
                 | packages = newPackages
-                , fetchingCache = newFetchingCache
                 , state = newState
               }
             , Cmd.map Fetched nextCmd
@@ -286,7 +267,7 @@ updateFetched :
     -> ( Model, Cmd Msg )
 updateFetched model fetched =
     case model.state of
-        Fetching oldDone ->
+        Fetching oldDone fetchingCache ->
             let
                 newFetchingCache =
                     case fetched of
@@ -294,31 +275,31 @@ updateFetched model fetched =
                             case result of
                                 Err error ->
                                     { packages =
-                                        model.fetchingCache.packages
+                                        fetchingCache.packages
                                             |> (Cache.allVersionsOfFetchingPackageCache name).set Failed
-                                    , depends = model.fetchingCache.depends
+                                    , depends = fetchingCache.depends
                                     }
 
                                 Ok packageVersions ->
                                     { packages =
-                                        model.fetchingCache.packages
+                                        fetchingCache.packages
                                             |> (Cache.allVersionsOfFetchingPackageCache name).set
                                                 (Succeeded packageVersions)
-                                    , depends = model.fetchingCache.depends
+                                    , depends = fetchingCache.depends
                                     }
                                         |> addMissingVersionsToDependsCache
 
                         Cache.FetchedDepends name version result ->
                             case result of
                                 Err error ->
-                                    { packages = model.fetchingCache.packages
-                                    , depends = Dict.insert ( name, version ) Failed model.fetchingCache.depends
+                                    { packages = fetchingCache.packages
+                                    , depends = Dict.insert ( name, version ) Failed fetchingCache.depends
                                     }
 
                                 Ok versionRanges ->
                                     { packages =
                                         Dict.union
-                                            model.fetchingCache.packages
+                                            fetchingCache.packages
                                             (versionRanges
                                                 |> Dict.map
                                                     (\n ( min, max ) ->
@@ -327,7 +308,7 @@ updateFetched model fetched =
                                                         }
                                                     )
                                             )
-                                    , depends = Dict.insert ( name, version ) (Succeeded versionRanges) model.fetchingCache.depends
+                                    , depends = Dict.insert ( name, version ) (Succeeded versionRanges) fetchingCache.depends
                                     }
 
                 newPackages =
@@ -363,7 +344,7 @@ updateFetched model fetched =
                 newState =
                     case maybeNextCmd of
                         Just _ ->
-                            Fetching newDone
+                            Fetching newDone newFetchingCache
 
                         Nothing ->
                             case Cache.validate newFetchingCache of
@@ -376,8 +357,7 @@ updateFetched model fetched =
                                         |> FetchingFailed
             in
             ( { model
-                | fetchingCache = newFetchingCache
-                , packages = newPackages
+                | packages = newPackages
                 , state = newState
               }
             , Cmd.map Fetched <| Maybe.withDefault Cmd.none maybeNextCmd
@@ -480,7 +460,7 @@ viewRightSection model =
         JsonParsingError error ->
             [ H.pre [] [ H.text (String.replace "\\n" "\n" error) ] ]
 
-        Fetching done ->
+        Fetching done _ ->
             [ H.text ("Fetching package data ... " ++ String.fromInt done) ]
 
         FetchingFailed errors ->
