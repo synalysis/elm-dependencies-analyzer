@@ -1,8 +1,7 @@
 #!/bin/bash
 
 #
-# This little script is originally from
-# https://guide.elm-lang.org/optimization/asset_size.html
+# This script is based on https://guide.elm-lang.org/optimization/asset_size.html
 #
 
 set -e
