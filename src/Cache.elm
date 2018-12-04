@@ -309,9 +309,7 @@ rangeDictOfDepends dependsCache packages =
     - versions according to minVersion
 
     Checks that
-    - all FetchedValue:s are Succeeded
-    - all `VersionId`:s of `versions` are present in `depends`
-    - all names in `depends` are present in `versions`
+    - ... TODO ...
 
 -}
 validate : FetchingCache -> Result (List String) Cache
