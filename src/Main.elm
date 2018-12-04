@@ -434,7 +434,13 @@ view model =
     H.table []
         [ H.tr []
             [ H.td [ A.colspan 2 ]
-                [ H.text "Open/paste application elm.json here and then press Analyze."
+                [ H.text "See README at "
+                , H.a
+                    [ A.href "https://github.com/malaire/elm-dependencies-analyzer"
+                    , A.target "_blank"
+                    ]
+                    [ H.text "GitHub repository" ]
+                , H.text " for usage instructions."
                 ]
             ]
         , H.tr []
@@ -462,13 +468,6 @@ viewLeftSection model =
     , H.button [ HE.onClick AnalyzeButtonClick ] [ H.text "Analyze" ]
     , H.hr [] []
     , H.button [ HE.onClick ExampleClick ] [ H.text "Load example" ]
-    , H.text " "
-    , H.a
-        [ A.href "https://github.com/malaire/elm-dependencies-analyzer"
-        , A.target "_blank"
-        , A.css [ C.textDecoration C.none, C.fontSize C.smaller ]
-        ]
-        [ H.text "source code @ github" ]
     ]
 
 
