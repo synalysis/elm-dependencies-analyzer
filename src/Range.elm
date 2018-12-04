@@ -242,9 +242,8 @@ describeParentIds reverseDepends parentIds =
                             Set.insert parentId seen
 
                         filterThis =
-                            Set.intersect allParents seen
-                                |> Set.isEmpty
-                                |> not
+                            (not <| Set.isEmpty allParents)
+                                && (Set.isEmpty <| Set.diff allParents seen)
                     in
                     if filterThis then
                         ( filtered
