@@ -379,24 +379,29 @@ validate fetchingCache =
                     (MaybeExtra.values >> Dict.fromList)
                     MaybeExtra.values
 
-        -- Check that all `VersionId`:s of `newVersions` are present in `newDepends`
+        -- Check that set of `VersionId`:s of `newVersions` match exactly those of `newDepends`
         validateVersions :
             Dict String (List ( Version, Int ))
             -> DependsCache
             -> Bool
         validateVersions newVersions newDepends =
-            newVersions
-                |> Dict.toList
-                |> List.map
-                    (\( name, versionList ) ->
-                        versionList
-                            |> List.map
-                                (\( version, _ ) ->
-                                    Dict.member ( name, version ) newDepends
-                                )
-                            |> List.all identity
-                    )
-                |> List.all identity
+            let
+                idsFromNewVersions =
+                    newVersions
+                        |> Dict.toList
+                        |> List.concatMap
+                            (\( name, versionList ) ->
+                                versionList |> List.map (\( version, _ ) -> ( name, version ))
+                            )
+                        |> Set.fromList
+
+                idsFromNewDepends =
+                    newDepends
+                        |> Dict.keys
+                        |> Set.fromList
+            in
+            (Set.size idsFromNewVersions == Set.size idsFromNewDepends)
+                && (Set.size idsFromNewVersions == (Set.size <| Set.union idsFromNewVersions idsFromNewDepends))
 
         -- Check that all childNames in `newDepends` are present in `newVersions`
         validateDependsNames :
@@ -418,10 +423,10 @@ validate fetchingCache =
         ( ( newVersions, [] ), ( newDepends, [] ) ) ->
             -- everything fetched, so now do other validations
             if not <| validateVersions newVersions newDepends then
-                Err [ "IMPOSSIBLE - Cache.validateVersions failed" ]
+                Err [ "Cache.validateVersions failed (IMPOSSIBLE)" ]
 
             else if not <| validateDependsNames newVersions newDepends then
-                Err [ "IMPOSSIBLE - Cache.validateDependsNames failed" ]
+                Err [ "Cache.validateDependsNames failed (IMPOSSIBLE)" ]
 
             else
                 Ok
