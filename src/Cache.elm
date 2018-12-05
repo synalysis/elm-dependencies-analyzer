@@ -34,6 +34,14 @@ import Version exposing (Version, VersionId, VersionRange)
 
 
 {-| Unvalidated cache, possibly incomplete. Used while cache is being fetched.
+-}
+type alias FetchingCache =
+    { packages : FetchingPackageCache
+    , depends : FetchingDependsCache
+    }
+
+
+{-|
 
   - `allVersions`
       - All versions known for package, with release timestamps.
@@ -45,17 +53,20 @@ import Version exposing (Version, VersionId, VersionRange)
         not be compatible with Elm 0.19, and so would give 404 error when
         fetching elm.json of the version.
 
+  - `minVersionIsJsonVersion`
+      - if `True` then `minVersion` is from parsed elm.json, and will not be
+        lowered during fetching even if some package depends on lower versions
+          - if I wanted to support downgrading packages, then this would need
+            to be changed, but for now this app is for upgrading packages
+      - if `False` then `minVersion` is from lowest depends seen, and can be
+        lowered further if some package depends on lower versions
+
 -}
-type alias FetchingCache =
-    { packages : FetchingPackageCache
-    , depends : FetchingDependsCache
-    }
-
-
 type alias FetchingPackageCache =
     Dict String
         { allVersions : FetchedValue (List ( Version, Int ))
         , minVersion : Version
+        , minVersionIsJsonVersion : Bool
         }
 
 

@@ -210,6 +210,7 @@ updateAnalyzeButtonClick model =
                                 ( name
                                 , { allVersions = NotFetched
                                   , minVersion = version
+                                  , minVersionIsJsonVersion = True
                                   }
                                 )
                             )
@@ -304,6 +305,7 @@ updateFetched model fetched =
                                                     (\n ( min, max ) ->
                                                         { allVersions = NotFetched
                                                         , minVersion = min
+                                                        , minVersionIsJsonVersion = False
                                                         }
                                                     )
 
@@ -313,7 +315,13 @@ updateFetched model fetched =
                                                 (\mergeName old new ->
                                                     Dict.insert mergeName
                                                         { allVersions = old.allVersions
-                                                        , minVersion = min old.minVersion new.minVersion
+                                                        , minVersion =
+                                                            if old.minVersionIsJsonVersion then
+                                                                old.minVersion
+
+                                                            else
+                                                                min old.minVersion new.minVersion
+                                                        , minVersionIsJsonVersion = old.minVersionIsJsonVersion
                                                         }
                                                 )
                                                 Dict.insert
