@@ -470,7 +470,7 @@ viewRightSection : Model -> List (Html Msg)
 viewRightSection model =
     case model.state of
         NothingAnalyzed ->
-            [ H.text "Nothing analyzed so far." ]
+            [ H.text "Nothing analyzed yet." ]
 
         JsonParsingError error ->
             [ H.pre [] [ H.text (String.replace "\\n" "\n" error) ] ]
