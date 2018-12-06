@@ -64,25 +64,61 @@ type alias StateDepends =
 -- INIT
 
 
-initialState : Cache -> List ( String, Version ) -> CResult State
-initialState cache requiredList =
-    requiredList
-        |> List.map (\( name, version ) -> ( name, Version.singletonRange version ))
+initialState : Cache -> Dict String ( Version, Bool ) -> CResult State
+initialState cache packages =
+    packages
+        |> Dict.map
+            (\name ( version, isRequired ) ->
+                ( Version.singletonRange version, isRequired )
+            )
         |> initialStateVr cache
 
 
-{-| Create initial state from list of required packages and their possible version ranges.
+{-| Create initial state from list of packages and their possible version ranges.
+
+    - entries with `True` are required packages
+    - other entries limit possible versions of those packages
+
 -}
-initialStateVr : Cache -> List ( String, VersionRange ) -> CResult State
-initialStateVr cache requiredList =
+initialStateVr : Cache -> Dict String ( VersionRange, Bool ) -> CResult State
+initialStateVr cache packages =
     let
         emptyState =
             Continue
                 { versions = Dict.empty
                 , depends = Dict.empty
                 }
+
+        requiredPackages =
+            packages
+                |> Dict.toList
+                |> List.filterMap
+                    (\( name, ( versionRange, isRequired ) ) ->
+                        if isRequired then
+                            Just ( name, versionRange )
+
+                        else
+                            Nothing
+                    )
+
+        limitingPackages =
+            packages
+                |> Dict.toList
+                |> List.filterMap
+                    (\( name, ( versionRange, isRequired ) ) ->
+                        if isRequired then
+                            Nothing
+
+                        else
+                            Just ( name, versionRange )
+                    )
     in
-    List.foldl (addRequiredPackage cache) emptyState requiredList
+    List.foldl (addRequiredPackage cache) emptyState requiredPackages
+        |> StepResult.andThen
+            (\state ->
+                Continue <|
+                    List.foldl (limitPackageVersions cache) state limitingPackages
+            )
 
 
 
@@ -518,6 +554,50 @@ addRequiredPackage cache ( name, versionRange ) crState =
                         }
                 )
         )
+
+
+{-| Limit possible versions of given package with given range.
+
+    - all required packages must be added before calling this
+
+-}
+limitPackageVersions : Cache -> ( String, VersionRange ) -> State -> State
+limitPackageVersions cache ( limitName, limitVersionRange ) state =
+    let
+        limitVersionSet : Set Version -> Set Version
+        limitVersionSet =
+            Set.filter (\version -> Version.versionInRange version limitVersionRange)
+
+        newStateVersions : StateVersions
+        newStateVersions =
+            case Dict.get limitName state.versions of
+                Just ( oldVersions, isRequired ) ->
+                    Dict.insert limitName ( limitVersionSet oldVersions, isRequired ) state.versions
+
+                Nothing ->
+                    state.versions
+
+        newStateDepends : StateDepends
+        newStateDepends =
+            state.depends
+                |> DictExtra.filterMap
+                    (\( name, version ) depends ->
+                        if name == limitName && not (Version.versionInRange version limitVersionRange) then
+                            Nothing
+
+                        else
+                            Just <|
+                                case Dict.get limitName depends of
+                                    Just oldVersions ->
+                                        Dict.insert limitName (limitVersionSet oldVersions) depends
+
+                                    Nothing ->
+                                        depends
+                    )
+    in
+    { versions = newStateVersions
+    , depends = newStateDepends
+    }
 
 
 

@@ -60,6 +60,11 @@ updateWithMouseOverVersion mouseOverVersionId cache viewCache =
                             let
                                 maybeBool =
                                     [ versionId, mouseOverVersionId ]
+                                        |> List.map
+                                            (\( name, version ) ->
+                                                ( name, ( version, True ) )
+                                            )
+                                        |> Dict.fromList
                                         |> Compatible.initialState cache
                                         |> Compatible.stepAllState cache
                                         |> crStateToMaybeBool
@@ -89,7 +94,7 @@ updateWithSelectedVersions packages cache viewCache =
                 |> DictExtra.filterMap
                     (\_ package ->
                         if package.isDirect then
-                            Just package.selectedVersion
+                            Just ( package.selectedVersion, True )
 
                         else
                             Nothing
@@ -106,8 +111,7 @@ updateWithSelectedVersions packages cache viewCache =
                                     let
                                         maybeBool =
                                             directPackages
-                                                |> Dict.insert name version
-                                                |> Dict.toList
+                                                |> Dict.insert name ( version, True )
                                                 |> Compatible.initialState cache
                                                 |> Compatible.stepAllState cache
                                                 |> crStateToMaybeBool
@@ -121,7 +125,6 @@ updateWithSelectedVersions packages cache viewCache =
         | isCompatibleWithDirect = isCompatibleWithDirect
         , directPackagesAreCompatible =
             directPackages
-                |> Dict.toList
                 |> Compatible.initialState cache
                 |> Compatible.stepAllState cache
                 |> crStateToMaybeBool
