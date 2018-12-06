@@ -62,11 +62,10 @@ type alias VersionId =
           - root VersionId:s have minDepth of 0,
             their immediate dependencies have minDepth of 1, etc.
       - immediateParents - immediate reverse dependencies, at (minDepth - 1)
-      - allParents - set of all parents, found recursively
 
 -}
 type alias ReverseDepends =
-    Dict VersionId ( Int, Set VersionId, Set VersionId )
+    Dict VersionId ( Int, Set VersionId )
 
 
 

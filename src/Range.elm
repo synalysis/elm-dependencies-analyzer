@@ -222,8 +222,8 @@ describeParentIds reverseDepends parentIds =
                 |> List.map
                     (\parentId ->
                         case Dict.get parentId reverseDepends of
-                            Just ( depth, _, allParents ) ->
-                                Ok ( parentId, depth, allParents )
+                            Just ( depth, _ ) ->
+                                Ok ( parentId, depth )
 
                             Nothing ->
                                 Err ()
@@ -231,7 +231,7 @@ describeParentIds reverseDepends parentIds =
                 |> ResultExtra.combine
 
         sortParentIds =
-            List.sortBy (\( _, depth, _ ) -> depth)
+            List.sortBy (\( _, depth ) -> depth)
 
         allParentsSeen : Set VersionId -> VersionId -> Result () Bool
         allParentsSeen seen id =
@@ -240,7 +240,7 @@ describeParentIds reverseDepends parentIds =
                     -- TODO: IMPOSSIBLE
                     Err ()
 
-                Just ( _, immediateParents, _ ) ->
+                Just ( _, immediateParents ) ->
                     if Set.isEmpty immediateParents then
                         Ok False
 
@@ -267,7 +267,7 @@ describeParentIds reverseDepends parentIds =
         -- filter out children of parentId:s already reported
         filterParentIds ids =
             let
-                filter ( parentId, depth, allParents ) ( filtered, seen ) =
+                filter ( parentId, depth ) ( filtered, seen ) =
                     let
                         newSeen =
                             Set.insert parentId seen
@@ -278,7 +278,7 @@ describeParentIds reverseDepends parentIds =
                         )
 
                     else
-                        ( filtered ++ [ ( parentId, depth, allParents ) ]
+                        ( filtered ++ [ ( parentId, depth ) ]
                         , newSeen
                         )
 
@@ -296,7 +296,7 @@ describeParentIds reverseDepends parentIds =
 
                 some ->
                     some
-                        |> List.map (\( parentId, _, _ ) -> Version.idToStr parentId)
+                        |> List.map (\( parentId, _ ) -> Version.idToStr parentId)
                         |> String.join ", "
 
         Err _ ->
