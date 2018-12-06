@@ -672,16 +672,16 @@ viewPackage { model, cache, viewCache, deps, package, name } =
                 , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
                 ]
                 []
-             , H.span [ A.css nameStyle ] [ H.text name ]
              ]
                 ++ (if package.initialState == Nothing then
-                        [ H.sup [ A.css [ C.color (C.hex "00A") ] ]
-                            [ H.text "NEW" ]
+                        [ H.span [ A.css [ C.color (C.hex "00A"), C.fontSize C.smaller ] ]
+                            [ H.text "NEW " ]
                         ]
 
                     else
                         []
                    )
+                ++ [ H.span [ A.css nameStyle ] [ H.text name ] ]
             )
          ]
             ++ viewPackageVersions
