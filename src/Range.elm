@@ -233,6 +233,37 @@ describeParentIds reverseDepends parentIds =
         sortParentIds =
             List.sortBy (\( _, depth, _ ) -> depth)
 
+        allParentsSeen : Set VersionId -> VersionId -> Result () Bool
+        allParentsSeen seen id =
+            case Dict.get id reverseDepends of
+                Nothing ->
+                    -- TODO: IMPOSSIBLE
+                    Err ()
+
+                Just ( _, immediateParents, _ ) ->
+                    if Set.isEmpty immediateParents then
+                        Ok False
+
+                    else
+                        immediateParents
+                            |> Set.foldl
+                                (\immediateParent accum ->
+                                    case accum of
+                                        Ok True ->
+                                            if Set.member immediateParent seen then
+                                                Ok True
+
+                                            else
+                                                allParentsSeen seen immediateParent
+
+                                        Ok False ->
+                                            Ok False
+
+                                        Err error ->
+                                            Err error
+                                )
+                                (Ok True)
+
         -- filter out children of parentId:s already reported
         filterParentIds ids =
             let
@@ -240,12 +271,8 @@ describeParentIds reverseDepends parentIds =
                     let
                         newSeen =
                             Set.insert parentId seen
-
-                        filterThis =
-                            (not <| Set.isEmpty allParents)
-                                && (Set.isEmpty <| Set.diff allParents seen)
                     in
-                    if filterThis then
+                    if Result.withDefault False <| allParentsSeen seen parentId then
                         ( filtered
                         , newSeen
                         )
