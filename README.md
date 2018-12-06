@@ -30,8 +30,8 @@ For each package the version in `elm.json` and all newer versions will be shown.
   - Press checkbox before package name to change whether package is considered direct package or not.
   - Packages which are mentioned in `elm.json`,
     but not needed by current direct packages, are marked with strikethrough.
-  - Additional packages which are needed, but not mentioned in `elm.json`,
-    are listed in a separate section.
+  - Additional packages which are not mentioned in `elm.json`,
+    are listed at end of each section.
 
 ### Incompatible versions
 
