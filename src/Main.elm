@@ -554,65 +554,55 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
 viewPackages : Model -> Cache -> ViewCache -> RangeDict -> List (Html Msg)
 viewPackages model cache viewCache deps =
     let
-        basePackagesToShow =
+        allPackagesToShow =
             model.packages
                 |> SortableDict.toList
-                |> List.filterMap
+                |> List.filter
                     (\( name, package ) ->
-                        case package.initialState of
-                            Just initialState ->
-                                Just ( name, package )
+                        if package.initialState /= Nothing then
+                            True
 
-                            Nothing ->
-                                Nothing
+                        else
+                            RangeDict.hasRange name deps
                     )
 
-        extraPackagesToShow =
-            Dict.diff
-                (RangeDict.ranges deps)
-                (Dict.fromList basePackagesToShow)
-                |> Dict.toList
+        -- packages of parsed elm.json are shown in direct/indirect sections
+        -- according to initialState ; new packages according to current state
+        showInDirectSection package =
+            case package.initialState of
+                Just initialState ->
+                    initialState.isDirect
+
+                Nothing ->
+                    package.isDirect
+
+        directSection =
+            allPackagesToShow
+                |> List.filter (Tuple.second >> showInDirectSection)
+
+        indirectSection =
+            allPackagesToShow
+                |> List.filter (Tuple.second >> showInDirectSection >> not)
+
+        showSection section =
+            section
+                |> List.concatMap
+                    (\( name, package ) ->
+                        viewPackage
+                            { model = model
+                            , cache = cache
+                            , viewCache = viewCache
+                            , deps = deps
+                            , package = package
+                            , name = name
+                            }
+                    )
     in
     [ H.table []
-        ((basePackagesToShow
-            |> List.concatMap
-                (\( name, package ) ->
-                    viewPackage
-                        { model = model
-                        , cache = cache
-                        , viewCache = viewCache
-                        , deps = deps
-                        , package = package
-                        , name = name
-                        }
-                )
-         )
+        (showSection directSection
             ++ [ H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
-            ++ (extraPackagesToShow
-                    |> List.concatMap
-                        (\( name, _ ) ->
-                            case SortableDict.get name model.packages of
-                                Just package ->
-                                    viewPackage
-                                        { model = model
-                                        , cache = cache
-                                        , viewCache = viewCache
-                                        , deps = deps
-                                        , package = package
-                                        , name = name
-                                        }
-
-                                Nothing ->
-                                    -- TODO IMPOSSIBLE
-                                    [ H.text "ERROR" ]
-                        )
-               )
-            ++ (if not <| List.isEmpty extraPackagesToShow then
-                    [ H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
-
-                else
-                    []
-               )
+            ++ showSection indirectSection
+            ++ [ H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
         )
     ]
 
