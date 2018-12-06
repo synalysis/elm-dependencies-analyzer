@@ -8,6 +8,7 @@ module ViewCache exposing
 import Cache exposing (Cache)
 import Compatible
 import Dict exposing (Dict)
+import Dict.Extra as DictExtra
 import Package exposing (Package)
 import StepResult
 import Version exposing (Version, VersionId)
@@ -85,16 +86,14 @@ updateWithSelectedVersions packages cache viewCache =
     let
         directPackages =
             packages
-                |> Dict.toList
-                |> List.filterMap
-                    (\( nameInFilter, package ) ->
+                |> DictExtra.filterMap
+                    (\_ package ->
                         if package.isDirect then
-                            Just ( nameInFilter, package.selectedVersion )
+                            Just package.selectedVersion
 
                         else
                             Nothing
                     )
-                |> Dict.fromList
 
         isCompatibleWithDirect =
             cache.versions
