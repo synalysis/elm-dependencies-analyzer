@@ -5,6 +5,8 @@
   - Section is based on parsed `elm.json`.
   - New packages are shown at end of each section, marked with "NEW".
 - New packages can also be marked direct.
+- FIXED: Showing red background was ignoring selected versions of
+  indirect packages.
 
 ## 2018-12-03
 - Better reporting of which packages are in conflict.
