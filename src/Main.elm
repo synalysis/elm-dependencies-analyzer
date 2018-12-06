@@ -658,16 +658,25 @@ viewPackage { model, cache, viewCache, deps, package, name } =
     in
     [ H.tr []
         ([ H.td []
-            [ packageLink
-            , H.input
+            ([ packageLink
+             , H.input
                 [ A.type_ "checkbox"
                 , A.checked package.isDirect
                 , A.disabled (package.jsonVersion == Nothing)
                 , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
                 ]
                 []
-            , H.span [ A.css nameStyle ] [ H.text name ]
-            ]
+             , H.span [ A.css nameStyle ] [ H.text name ]
+             ]
+                ++ (if package.jsonVersion == Nothing then
+                        [ H.sup [ A.css [ C.color (C.hex "00A") ] ]
+                            [ H.text "NEW" ]
+                        ]
+
+                    else
+                        []
+                   )
+            )
          ]
             ++ viewPackageVersions
                 { model = model
