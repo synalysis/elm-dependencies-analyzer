@@ -558,6 +558,9 @@ viewPackages model cache viewCache deps =
                         if package.initialState /= Nothing then
                             True
 
+                        else if package.isDirect then
+                            True
+
                         else
                             RangeDict.hasRange name deps
                     )
@@ -668,7 +671,6 @@ viewPackage { model, cache, viewCache, deps, package, name } =
              , H.input
                 [ A.type_ "checkbox"
                 , A.checked package.isDirect
-                , A.disabled (package.initialState == Nothing)
                 , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
                 ]
                 []
