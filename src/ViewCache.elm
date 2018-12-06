@@ -9,7 +9,6 @@ import Cache exposing (Cache)
 import Compatible
 import Dict exposing (Dict)
 import Package exposing (Package)
-import SortableDict exposing (SortableDict)
 import StepResult
 import Version exposing (Version, VersionId)
 
@@ -31,7 +30,7 @@ type alias ViewCache =
 -- BUILD
 
 
-new : SortableDict String Package -> Cache -> ViewCache
+new : Dict String Package -> Cache -> ViewCache
 new packages cache =
     { pairIsCompatible = Dict.empty
     , directPackagesAreCompatible = Nothing
@@ -81,12 +80,12 @@ updateWithMouseOverVersion mouseOverVersionId cache viewCache =
 
 {-| This needs to be called when the set of (selected versions of isDirect packages) changes.
 -}
-updateWithSelectedVersions : SortableDict String Package -> Cache -> ViewCache -> ViewCache
+updateWithSelectedVersions : Dict String Package -> Cache -> ViewCache -> ViewCache
 updateWithSelectedVersions packages cache viewCache =
     let
         directPackages =
             packages
-                |> SortableDict.toList
+                |> Dict.toList
                 |> List.filterMap
                     (\( nameInFilter, package ) ->
                         if package.isDirect then

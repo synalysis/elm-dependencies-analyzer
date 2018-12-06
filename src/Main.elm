@@ -21,7 +21,6 @@ import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
 import Package exposing (Package)
 import RangeDict exposing (RangeDict)
-import SortableDict exposing (SortableDict)
 import StepResult
 import Task
 import Version exposing (Version, VersionId, VersionRange)
@@ -36,7 +35,7 @@ type alias Model =
     { state : ModelState
     , inputJson : String
     , mouseOverVersion : Maybe VersionId
-    , packages : SortableDict String Package
+    , packages : Dict String Package
     }
 
 
@@ -84,7 +83,7 @@ init _ =
     ( { state = NothingAnalyzed
       , inputJson = ""
       , mouseOverVersion = Nothing
-      , packages = SortableDict.empty
+      , packages = Dict.empty
       }
     , Cmd.none
     )
@@ -195,7 +194,7 @@ updateAnalyzeButtonClick model =
     case JD.decodeString applicationDependenciesDecoder model.inputJson of
         Err error ->
             ( { model
-                | packages = SortableDict.empty
+                | packages = Dict.empty
                 , state = JsonParsingError (JD.errorToString error)
               }
             , Cmd.none
@@ -231,7 +230,7 @@ updateAnalyzeButtonClick model =
                                   }
                                 )
                             )
-                        |> SortableDict.fromList
+                        |> Dict.fromList
 
                 newFetchingCache =
                     { packages = newPackageCache
@@ -341,10 +340,10 @@ updateFetched model fetched =
                 newPackages =
                     case fetched of
                         Cache.FetchedVersions name (Ok packageVersions) ->
-                            if not (SortableDict.member name model.packages) then
+                            if not (Dict.member name model.packages) then
                                 case ListExtra.last <| List.map Tuple.first <| packageVersions of
                                     Just latestVersion ->
-                                        SortableDict.insert
+                                        Dict.insert
                                             name
                                             { isDirect = False
                                             , selectedVersion = latestVersion
@@ -504,9 +503,6 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
         allPackages : Dict String ( Version, Bool )
         allPackages =
             model.packages
-                -- TODO: I need SortableDict.toDict
-                |> SortableDict.toList
-                |> Dict.fromList
                 |> Dict.map (\_ package -> ( package.selectedVersion, package.isDirect ))
     in
     case Cache.rangeDictOfDepends cache.depends allPackages of
@@ -556,7 +552,7 @@ viewPackages model cache viewCache deps =
     let
         allPackagesToShow =
             model.packages
-                |> SortableDict.toList
+                |> Dict.toList
                 |> List.filter
                     (\( name, package ) ->
                         if package.initialState /= Nothing then
@@ -564,6 +560,22 @@ viewPackages model cache viewCache deps =
 
                         else
                             RangeDict.hasRange name deps
+                    )
+                |> List.sortWith
+                    (\( nameA, packageA ) ( nameB, packageB ) ->
+                        -- sort new packages last
+                        case ( packageA.initialState, packageB.initialState ) of
+                            ( Just _, Nothing ) ->
+                                LT
+
+                            ( Nothing, Just _ ) ->
+                                GT
+
+                            ( Just _, Just _ ) ->
+                                compare nameA nameB
+
+                            ( Nothing, Nothing ) ->
+                                compare nameA nameB
                     )
 
         -- packages of parsed elm.json are shown in direct/indirect sections
@@ -846,16 +858,16 @@ applicationDependenciesDecoder =
 -- MONOCLE - OF PACKAGES
 
 
-selectedVersionOfPackages : String -> Optional (SortableDict String Package) Version
+selectedVersionOfPackages : String -> Optional (Dict String Package) Version
 selectedVersionOfPackages name =
-    SortableDict.valueOfSortableDict name
+    Monocle.Common.dict name
         |> Monocle.Compose.optionalWithLens
             (Lens .selectedVersion (\b a -> { a | selectedVersion = b }))
 
 
-isDirectOfPackages : String -> Optional (SortableDict String Package) Bool
+isDirectOfPackages : String -> Optional (Dict String Package) Bool
 isDirectOfPackages name =
-    SortableDict.valueOfSortableDict name
+    Monocle.Common.dict name
         |> Monocle.Compose.optionalWithLens
             (Lens .isDirect (\b a -> { a | isDirect = b }))
 
@@ -863,8 +875,8 @@ isDirectOfPackages name =
 modifyIsDirectOfPackages :
     String
     -> (Bool -> Bool)
-    -> SortableDict String Package
-    -> SortableDict String Package
+    -> Dict String Package
+    -> Dict String Package
 modifyIsDirectOfPackages name fn =
     Monocle.Optional.modify (isDirectOfPackages name) fn
 
