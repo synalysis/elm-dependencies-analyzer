@@ -22,8 +22,8 @@ import Version exposing (Version, VersionId)
 -}
 type alias ViewCache =
     { pairIsCompatible : Dict ( VersionId, VersionId ) (Maybe Bool)
-    , directPackagesAreCompatible : Maybe Bool
-    , isCompatibleWithDirect : Dict VersionId (Maybe Bool)
+    , selectedVersionsAreCompatible : Maybe Bool
+    , isCompatibleWithSelected : Dict VersionId (Maybe Bool)
     }
 
 
@@ -34,8 +34,8 @@ type alias ViewCache =
 new : Dict String Package -> Cache -> ViewCache
 new packages cache =
     { pairIsCompatible = Dict.empty
-    , directPackagesAreCompatible = Nothing
-    , isCompatibleWithDirect = Dict.empty
+    , selectedVersionsAreCompatible = Nothing
+    , isCompatibleWithSelected = Dict.empty
     }
         |> updateWithSelectedVersions packages cache
 
@@ -89,16 +89,9 @@ updateWithMouseOverVersion mouseOverVersionId cache viewCache =
 updateWithSelectedVersions : Dict String Package -> Cache -> ViewCache -> ViewCache
 updateWithSelectedVersions packages cache viewCache =
     let
-        directPackages =
+        selectedVersions =
             packages
-                |> DictExtra.filterMap
-                    (\_ package ->
-                        if package.isDirect then
-                            Just ( package.selectedVersion, True )
-
-                        else
-                            Nothing
-                    )
+                |> Dict.map (\_ package -> ( package.selectedVersion, package.isDirect ))
 
         isCompatibleWithDirect =
             cache.versions
@@ -110,7 +103,7 @@ updateWithSelectedVersions packages cache viewCache =
                                 (\( version, _ ) ->
                                     let
                                         maybeBool =
-                                            directPackages
+                                            selectedVersions
                                                 |> Dict.insert name ( version, True )
                                                 |> Compatible.initialState cache
                                                 |> Compatible.stepAllState cache
@@ -122,9 +115,9 @@ updateWithSelectedVersions packages cache viewCache =
                 |> Dict.fromList
     in
     { viewCache
-        | isCompatibleWithDirect = isCompatibleWithDirect
-        , directPackagesAreCompatible =
-            directPackages
+        | isCompatibleWithSelected = isCompatibleWithDirect
+        , selectedVersionsAreCompatible =
+            selectedVersions
                 |> Compatible.initialState cache
                 |> Compatible.stepAllState cache
                 |> crStateToMaybeBool

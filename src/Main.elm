@@ -515,7 +515,7 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
                     RangeDict.getProblems deps
 
                 isInternalInconsistency =
-                    case viewCache.directPackagesAreCompatible of
+                    case viewCache.selectedVersionsAreCompatible of
                         Nothing ->
                             False
 
@@ -760,11 +760,11 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
                 Nothing ->
                     Nothing
 
-        directPackagesAreCompatible =
-            viewCache.directPackagesAreCompatible
+        selectedVersionsAreCompatible =
+            viewCache.selectedVersionsAreCompatible
 
-        isCompatibleWithDirect =
-            Dict.get ( name, version ) viewCache.isCompatibleWithDirect
+        isCompatibleWithSelected =
+            Dict.get ( name, version ) viewCache.isCompatibleWithSelected
                 |> MaybeExtra.join
 
         styleBase =
@@ -794,7 +794,7 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
             if version == package.selectedVersion && packageNeeded then
                 [ C.backgroundColor (C.hex "CCE") ]
 
-            else if directPackagesAreCompatible == Just True && isCompatibleWithDirect == Just False then
+            else if selectedVersionsAreCompatible == Just True && isCompatibleWithSelected == Just False then
                 [ C.backgroundColor (C.hex "FBB") ]
 
             else
@@ -809,8 +809,8 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
                     && not packageHasMouseOver
                     && (isCompatibleWithMouseOver == Nothing)
                 )
-                    || (isCompatibleWithDirect == Nothing)
-                    || (directPackagesAreCompatible == Nothing)
+                    || (isCompatibleWithSelected == Nothing)
+                    || (selectedVersionsAreCompatible == Nothing)
             then
                 "error"
 
