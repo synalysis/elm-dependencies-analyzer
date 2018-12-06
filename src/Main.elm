@@ -222,8 +222,12 @@ updateAnalyzeButtonClick model =
                             (\( name, version, isDirect ) ->
                                 ( name
                                 , { isDirect = isDirect
-                                  , jsonVersion = Just version
                                   , selectedVersion = version
+                                  , initialState =
+                                        Just
+                                            { isDirect = isDirect
+                                            , version = version
+                                            }
                                   }
                                 )
                             )
@@ -343,8 +347,8 @@ updateFetched model fetched =
                                         SortableDict.insert
                                             name
                                             { isDirect = False
-                                            , jsonVersion = Nothing
                                             , selectedVersion = latestVersion
+                                            , initialState = Nothing
                                             }
                                             model.packages
 
@@ -555,8 +559,8 @@ viewPackages model cache viewCache deps =
                 |> SortableDict.toList
                 |> List.filterMap
                     (\( name, package ) ->
-                        case package.jsonVersion of
-                            Just jsonVersion ->
+                        case package.initialState of
+                            Just initialState ->
                                 Just ( name, package )
 
                             Nothing ->
@@ -662,13 +666,13 @@ viewPackage { model, cache, viewCache, deps, package, name } =
              , H.input
                 [ A.type_ "checkbox"
                 , A.checked package.isDirect
-                , A.disabled (package.jsonVersion == Nothing)
+                , A.disabled (package.initialState == Nothing)
                 , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
                 ]
                 []
              , H.span [ A.css nameStyle ] [ H.text name ]
              ]
-                ++ (if package.jsonVersion == Nothing then
+                ++ (if package.initialState == Nothing then
                         [ H.sup [ A.css [ C.color (C.hex "00A") ] ]
                             [ H.text "NEW" ]
                         ]

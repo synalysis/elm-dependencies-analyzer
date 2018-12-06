@@ -8,8 +8,18 @@ import Version exposing (Version, VersionRange)
 -- TYPES
 
 
+{-|
+
+  - `initialState`
+      - State of the package in parsed elm.json.
+
+-}
 type alias Package =
     { isDirect : Bool
-    , jsonVersion : Maybe Version
     , selectedVersion : Version
+    , initialState :
+        Maybe
+            { isDirect : Bool
+            , version : Version
+            }
     }
