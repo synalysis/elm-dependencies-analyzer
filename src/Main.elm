@@ -252,7 +252,10 @@ updateAnalyzeButtonClick model =
 
                                 Err errors ->
                                     ( errors
-                                        |> List.map (\error -> H.li [] [ H.text error ])
+                                        |> List.map
+                                            (\error ->
+                                                H.li [] [ H.text <| Misc.errorToStr error ]
+                                            )
                                         |> FetchingFailed
                                     , Cmd.none
                                     )
@@ -379,7 +382,10 @@ updateFetched model fetched =
 
                                 Err errors ->
                                     errors
-                                        |> List.map (\error -> H.li [] [ H.text error ])
+                                        |> List.map
+                                            (\error ->
+                                                H.li [] [ H.text <| Misc.errorToStr error ]
+                                            )
                                         |> FetchingFailed
             in
             ( { model
@@ -507,7 +513,7 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
     in
     case Cache.rangeDictOfDepends cache.depends allPackages of
         Err error ->
-            [ H.ul [] [ H.li [] [ H.text error ] ] ]
+            [ H.ul [] [ H.li [] [ H.text <| Misc.internalErrorToStr error ] ] ]
 
         Ok deps ->
             let

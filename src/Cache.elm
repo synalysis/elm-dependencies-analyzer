@@ -18,6 +18,7 @@ import Http
 import Json.Decode as JD
 import Json.Decode.Field as JF
 import Maybe.Extra as MaybeExtra
+import Misc exposing (Error(..), InternalError(..))
 import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
@@ -145,7 +146,7 @@ of each package, keeping track of reverse dependencies.
 reverseDependsFromSelected :
     DependsCache
     -> Dict String ( Version, Bool )
-    -> Result String Version.ReverseDepends
+    -> Result InternalError Version.ReverseDepends
 reverseDependsFromSelected dependsCache packages =
     let
         initialVersionIds =
@@ -173,7 +174,7 @@ reverseDependsFromSelected dependsCache packages =
             Set String
             -> List ( VersionId, Int, Set VersionId )
             -> Version.ReverseDepends
-            -> Result String Version.ReverseDepends
+            -> Result InternalError Version.ReverseDepends
         step seen todo dict =
             case todo of
                 [] ->
@@ -197,15 +198,14 @@ reverseDependsFromSelected dependsCache packages =
 
                             else
                                 Err <|
-                                    Version.idToStr ( name, version )
-                                        ++ " has conflicting prevDepth (IMPOSSIBLE)"
+                                    OtherInternalError 8200 <|
+                                        Version.idToStr ( name, version )
+                                            ++ " has conflicting prevDepth"
 
                         Nothing ->
                             case Dict.get ( name, version ) dependsCache of
                                 Nothing ->
-                                    Err <|
-                                        Version.idToStr ( name, version )
-                                            ++ " is not in dependsCache (IMPOSSIBLE)"
+                                    Err <| IdNotFound 4750 ( name, version )
 
                                 Just depends ->
                                     let
@@ -240,7 +240,7 @@ reverseDependsFromSelected dependsCache packages =
                                                                     )
 
                                                             Nothing ->
-                                                                Err <| childName ++ " is not in packages (INTERNAL ERROR)"
+                                                                Err <| NameNotFound 3606 childName
                                                     )
                                                 |> ResultExtra.combine
                                     in
@@ -256,7 +256,7 @@ reverseDependsFromSelected dependsCache packages =
 
 {-| Create RangeDict from dependencies of VersionId:s found by reverseDependsFromSelected.
 -}
-rangeDictOfDepends : DependsCache -> Dict String ( Version, Bool ) -> Result String RangeDict
+rangeDictOfDepends : DependsCache -> Dict String ( Version, Bool ) -> Result InternalError RangeDict
 rangeDictOfDepends dependsCache packages =
     case reverseDependsFromSelected dependsCache packages of
         Err error ->
@@ -276,9 +276,7 @@ rangeDictOfDepends dependsCache packages =
                                             |> Ok
 
                                     Nothing ->
-                                        Err <|
-                                            Version.idToStr parentId
-                                                ++ " not found in dependsCache. (IMPOSSIBLE)"
+                                        Err <| IdNotFound 4317 parentId
                             )
                         |> ResultExtra.combine
                         |> Result.map List.concat
@@ -314,7 +312,7 @@ rangeDictOfDepends dependsCache packages =
     - ... TODO ...
 
 -}
-validate : FetchingCache -> Result (List String) Cache
+validate : FetchingCache -> Result (List Error) Cache
 validate fetchingCache =
     let
         -- check that sets are equal, i.e. have exact same members
@@ -323,7 +321,7 @@ validate fetchingCache =
         setEqual a b =
             (Set.size a == Set.size b) && (Set.size a == (Set.size <| Set.union a b))
 
-        newVersionsWithErrors : ( Dict String (List ( Version, Int )), List String )
+        newVersionsWithErrors : ( Dict String (List ( Version, Int )), List Error )
         newVersionsWithErrors =
             fetchingCache.packages
                 |> Dict.toList
@@ -341,12 +339,12 @@ validate fetchingCache =
 
                             NotFetched ->
                                 ( Nothing
-                                , Just (name ++ " hasn't been fetched. (IMPOSSIBLE)")
+                                , Just <| InternalError <| NameNotFetched 1326 name
                                 )
 
                             Failed ->
                                 ( Nothing
-                                , Just (name ++ " fetching failed.")
+                                , Just <| FetchingFailedWithName name
                                 )
                     )
                 |> List.unzip
@@ -354,7 +352,7 @@ validate fetchingCache =
                     (MaybeExtra.values >> Dict.fromList)
                     MaybeExtra.values
 
-        newDependsWithErrors : ( DependsCache, List String )
+        newDependsWithErrors : ( DependsCache, List Error )
         newDependsWithErrors =
             fetchingCache.depends
                 |> Dict.toList
@@ -371,13 +369,12 @@ validate fetchingCache =
 
                             NotFetched ->
                                 ( Nothing
-                                , Just
-                                    (Version.idToStr parentId ++ " hasn't been fetched. (IMPOSSIBLE)")
+                                , Just <| InternalError <| IdNotFetched 9820 parentId
                                 )
 
                             Failed ->
                                 ( Nothing
-                                , Just (Version.idToStr parentId ++ " fetching failed.")
+                                , Just <| FetchingFailedWithId parentId
                                 )
                     )
                 |> List.unzip
@@ -428,10 +425,10 @@ validate fetchingCache =
         ( ( newVersions, [] ), ( newDepends, [] ) ) ->
             -- everything fetched, so now do other validations
             if not <| validateVersions newVersions newDepends then
-                Err [ "Cache.validateVersions failed (IMPOSSIBLE)" ]
+                Err [ InternalError <| OtherInternalError 3863 "Cache.validateVersions failed" ]
 
             else if not <| validateDependsNames newVersions newDepends then
-                Err [ "Cache.validateDependsNames failed (IMPOSSIBLE)" ]
+                Err [ InternalError <| OtherInternalError 8685 "Cache.validateDependsNames failed" ]
 
             else
                 Ok

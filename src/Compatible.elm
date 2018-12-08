@@ -17,6 +17,7 @@ import Html.Styled as H exposing (Html)
 import Html.Styled.Attributes as A
 import List.Extra as ListExtra
 import Maybe.Extra as MaybeExtra
+import Misc exposing (InternalError(..))
 import RangeDict exposing (RangeDict)
 import Result.Extra as ResultExtra
 import Set exposing (Set)
@@ -29,7 +30,7 @@ import Version exposing (Version, VersionId, VersionRange, VersionRangeX)
 
 
 type alias CResult a =
-    StepResult String Bool a
+    StepResult InternalError Bool a
 
 
 {-| State in a process of solving a package compatibility problem.
@@ -142,7 +143,7 @@ stepState cache crState =
                         |> stepRemoveVersionIdsWithEmptyDependVersions
 
                 Nothing ->
-                    endErr "TODO"
+                    endErr <| OtherInternalError 1247 "TODO"
 
 
 {-| TODO WIP
@@ -169,7 +170,7 @@ TODO: simplify/cleanup code
 stepTraverse : CResult State -> CResult State
 stepTraverse crState =
     let
-        step : Dict String (Set Version) -> List String -> StateDepends -> Result String Bool
+        step : Dict String (Set Version) -> List String -> StateDepends -> Result InternalError Bool
         step possibleVersions todo stateDepends =
             case todo of
                 [] ->
@@ -184,12 +185,12 @@ stepTraverse crState =
                         Ok True
 
                     else
-                        Err "IMPOSSIBLE - not allHaveSingleVersion"
+                        Err <| OtherInternalError 9035 "not allHaveSingleVersion"
 
                 nextTodo :: restTodo ->
                     case Dict.get nextTodo possibleVersions of
                         Nothing ->
-                            Err "IMPOSSIBLE - nextTodo not in possibleVersions"
+                            Err <| NameNotFound 3010 nextTodo
 
                         Just nextTodoVersions ->
                             let
@@ -199,7 +200,7 @@ stepTraverse crState =
                                         Ok False ->
                                             case Dict.get ( nextTodo, nextTodoVersion ) stateDepends of
                                                 Nothing ->
-                                                    Err "IMPOSSIBLE - nextTodoId not in stateDepends"
+                                                    Err <| IdNotFound 4290 ( nextTodo, nextTodoVersion )
 
                                                 Just depends ->
                                                     let
@@ -323,7 +324,7 @@ stepAddMissingPackage cache missingName crState =
                    2) Then get intersect of those unions
                    TODO: perhaps simplify
                 -}
-                resultMaybeVersions : Result String (Maybe (Set Version))
+                resultMaybeVersions : Result InternalError (Maybe (Set Version))
                 resultMaybeVersions =
                     getAllVersions state
                         |> List.map
@@ -334,7 +335,7 @@ stepAddMissingPackage cache missingName crState =
                                         (\version ->
                                             case Dict.get ( name, version ) state.depends of
                                                 Nothing ->
-                                                    Err "IMPOSSIBLE - addMissingPackage"
+                                                    Err <| IdNotFound 9660 ( name, version )
 
                                                 Just depends ->
                                                     Ok <| Dict.get missingName depends
@@ -350,7 +351,7 @@ stepAddMissingPackage cache missingName crState =
                     endErr error
 
                 Ok Nothing ->
-                    endErr "TODO - why Nothing? @ addMissingPackage"
+                    endErr <| OtherInternalError 1777 "TODO - why Nothing? @ addMissingPackage"
 
                 Ok (Just versions) ->
                     if Set.isEmpty versions then
@@ -393,7 +394,7 @@ stepPruneDependVersionsWithVersionsOfPackage pruneName crState =
         \state ->
             case Dict.get pruneName state.versions of
                 Nothing ->
-                    endErr <| pruneName ++ " is not in stateVersions"
+                    endErr <| NameNotFound 4536 pruneName
 
                 Just ( pruneVersions, _ ) ->
                     let
@@ -613,7 +614,7 @@ addToStateVersions name versions isRequired stateVersions =
             Continue <| Dict.insert name ( Set.fromList versions, isRequired ) stateVersions
 
         Just _ ->
-            endErr <| name ++ " is already in stateVersions"
+            endErr <| NameExistsAlready 1573 name
 
 
 {-| Add VersionId and its dependencies into StateDepends.
@@ -639,7 +640,7 @@ addToStateDepends cache name version crStateDepends =
                             endErr error
 
                 Just _ ->
-                    endErr <| Version.idToStr versionId ++ " is already in stateDepends."
+                    endErr <| IdExistsAlready 9240 versionId
 
         end ->
             end
@@ -649,11 +650,11 @@ addToStateDepends cache name version crStateDepends =
 -- CONVERSIONS
 
 
-dependsOfVersion : Cache -> VersionId -> Result String (Dict String (Set Version))
+dependsOfVersion : Cache -> VersionId -> Result InternalError (Dict String (Set Version))
 dependsOfVersion cache (( name, version ) as versionId) =
     case Dict.get versionId cache.depends of
         Nothing ->
-            Err (Version.idToStr versionId ++ " is not in cache.depends")
+            Err <| IdNotFound 6531 versionId
 
         Just depends ->
             depends
@@ -671,11 +672,11 @@ dependsOfVersion cache (( name, version ) as versionId) =
                 |> Result.map Dict.fromList
 
 
-versionRangeToVersionList : Cache -> String -> VersionRange -> Result String (List Version)
+versionRangeToVersionList : Cache -> String -> VersionRange -> Result InternalError (List Version)
 versionRangeToVersionList cache name versionRange =
     case Dict.get name cache.versions of
         Nothing ->
-            Err <| name ++ " is not in cache.versions"
+            Err <| NameNotFound 3502 name
 
         Just versions ->
             versions
@@ -750,7 +751,7 @@ debugHtml crState =
     in
     case crState of
         End (Err error) ->
-            H.div [] [ H.text <| "ERROR: " ++ error ]
+            H.div [] [ H.text <| Misc.internalErrorToStr error ]
 
         End (Ok True) ->
             H.div [] [ H.text <| "TRUE" ]
