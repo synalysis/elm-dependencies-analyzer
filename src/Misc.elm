@@ -40,6 +40,12 @@ type Error
     | InternalError InternalError
 
 
+{-| These errors should never happen and always indicate some internal error in code.
+
+  - Error might not be internal to the module in question, but can also be error in caller.
+  - First parameter is unique random number, to uniquely identify each possible error location.
+
+-}
 type InternalError
     = NameNotFetched Int String
     | NameNotFound Int String
