@@ -15,12 +15,13 @@ import Json.Decode.Field as JF
 import Json.Encode as JE
 import List.Extra as ListExtra
 import Maybe.Extra as MaybeExtra
-import Misc exposing (Package)
+import Misc exposing (InternalError(..), Package)
 import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
 import RangeDict exposing (RangeDict)
+import Result.Extra as ResultExtra
 import StepResult
 import Task
 import Version exposing (Version, VersionId, VersionRange)
@@ -527,33 +528,41 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
 
                         Just bool ->
                             (problems == []) /= bool
+
+                rPackagesHtml =
+                    viewPackages model cache viewCache deps
             in
-            viewPackages model cache viewCache deps
-                ++ (case problems of
-                        [] ->
-                            [ H.div
-                                [ A.css [ C.color (C.hex "080") ] ]
-                                [ H.text "Selected versions have no conflicts."
-                                ]
-                            ]
+            case rPackagesHtml of
+                Err error ->
+                    [ H.div [] [ H.text <| Misc.internalErrorToStr error ] ]
 
-                        nonEmptyProblems ->
-                            [ H.div
-                                [ A.css [ C.color (C.hex "800") ] ]
-                                [ H.text "Selected versions have dependency conflicts:"
-                                , H.ul [] nonEmptyProblems
-                                ]
-                            ]
-                   )
-                ++ (if isInternalInconsistency then
-                        [ H.div [] [ H.text "ERROR: Internal inconsistency detected." ] ]
+                Ok packagesHtml ->
+                    [ packagesHtml ]
+                        ++ (case problems of
+                                [] ->
+                                    [ H.div
+                                        [ A.css [ C.color (C.hex "080") ] ]
+                                        [ H.text "Selected versions have no conflicts."
+                                        ]
+                                    ]
 
-                    else
-                        []
-                   )
+                                nonEmptyProblems ->
+                                    [ H.div
+                                        [ A.css [ C.color (C.hex "800") ] ]
+                                        [ H.text "Selected versions have dependency conflicts:"
+                                        , H.ul [] nonEmptyProblems
+                                        ]
+                                    ]
+                           )
+                        ++ (if isInternalInconsistency then
+                                [ H.div [] [ H.text "ERROR: Internal inconsistency detected." ] ]
+
+                            else
+                                []
+                           )
 
 
-viewPackages : Model -> Cache -> ViewCache -> RangeDict -> List (Html Msg)
+viewPackages : Model -> Cache -> ViewCache -> RangeDict -> Result InternalError (Html Msg)
 viewPackages model cache viewCache deps =
     let
         allPackagesToShow =
@@ -605,9 +614,10 @@ viewPackages model cache viewCache deps =
             allPackagesToShow
                 |> List.filter (Tuple.second >> showInDirectSection >> not)
 
+        showSection : List ( String, Package ) -> List (Result InternalError (Html Msg))
         showSection section =
             section
-                |> List.concatMap
+                |> List.map
                     (\( name, package ) ->
                         viewPackage
                             { model = model
@@ -618,14 +628,21 @@ viewPackages model cache viewCache deps =
                             , name = name
                             }
                     )
+
+        rHtml : Result InternalError (List (Html Msg))
+        rHtml =
+            showSection directSection
+                ++ [ Ok <| H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
+                ++ showSection indirectSection
+                ++ [ Ok <| H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
+                |> ResultExtra.combine
     in
-    [ H.table []
-        (showSection directSection
-            ++ [ H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
-            ++ showSection indirectSection
-            ++ [ H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
-        )
-    ]
+    case rHtml of
+        Err error ->
+            Err error
+
+        Ok html ->
+            Ok <| H.table [] html
 
 
 viewPackage :
@@ -636,7 +653,7 @@ viewPackage :
     , package : Package
     , name : String
     }
-    -> List (Html Msg)
+    -> Result InternalError (Html Msg)
 viewPackage { model, cache, viewCache, deps, package, name } =
     let
         packageLink =
@@ -670,29 +687,9 @@ viewPackage { model, cache, viewCache, deps, package, name } =
 
         nameStyle =
             nameStyleColor ++ nameStyleStrike
-    in
-    [ H.tr []
-        ([ H.td []
-            ([ packageLink
-             , H.input
-                [ A.type_ "checkbox"
-                , A.checked package.isDirect
-                , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
-                ]
-                []
-             ]
-                ++ (if package.initialState == Nothing then
-                        [ H.span [ A.css [ C.color (C.hex "00A"), C.fontSize C.smaller ] ]
-                            [ H.text "NEW " ]
-                        ]
 
-                    else
-                        []
-                   )
-                ++ [ H.span [ A.css nameStyle ] [ H.text name ] ]
-            )
-         ]
-            ++ viewPackageVersions
+        rPackageVersionsHtml =
+            viewPackageVersions
                 { model = model
                 , cache = cache
                 , viewCache = viewCache
@@ -700,8 +697,36 @@ viewPackage { model, cache, viewCache, deps, package, name } =
                 , packageNeeded = packageNeeded
                 , name = name
                 }
-        )
-    ]
+    in
+    case rPackageVersionsHtml of
+        Err error ->
+            Err error
+
+        Ok packageVersionsHtml ->
+            Ok <|
+                H.tr []
+                    ([ H.td []
+                        ([ packageLink
+                         , H.input
+                            [ A.type_ "checkbox"
+                            , A.checked package.isDirect
+                            , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
+                            ]
+                            []
+                         ]
+                            ++ (if package.initialState == Nothing then
+                                    [ H.span [ A.css [ C.color (C.hex "00A"), C.fontSize C.smaller ] ]
+                                        [ H.text "NEW " ]
+                                    ]
+
+                                else
+                                    []
+                               )
+                            ++ [ H.span [ A.css nameStyle ] [ H.text name ] ]
+                        )
+                     ]
+                        ++ packageVersionsHtml
+                    )
 
 
 viewPackageVersions :
@@ -712,7 +737,7 @@ viewPackageVersions :
     , packageNeeded : Bool
     , name : String
     }
-    -> List (Html Msg)
+    -> Result InternalError (List (Html Msg))
 viewPackageVersions { model, cache, viewCache, package, packageNeeded, name } =
     case Dict.get name cache.versions of
         Just versions ->
@@ -729,9 +754,10 @@ viewPackageVersions { model, cache, viewCache, package, packageNeeded, name } =
                             , version = version
                             }
                     )
+                |> ResultExtra.combine
 
         Nothing ->
-            [ H.text "ERROR" ]
+            Err <| NameNotFound 6754 name
 
 
 viewVersion :
@@ -743,7 +769,7 @@ viewVersion :
     , name : String
     , version : Version
     }
-    -> Html Msg
+    -> Result InternalError (Html Msg)
 viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
     let
         versionHasMouseOver =
@@ -809,36 +835,38 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
         style =
             styleBase ++ styleColor ++ styleBorder ++ styleBgColor
 
-        text =
-            if
-                ((model.mouseOverVersion /= Nothing)
-                    && not packageHasMouseOver
-                    && (isCompatibleWithMouseOver == Nothing)
-                )
-                    || (isCompatibleWithSelected == Nothing)
-                    || (selectedVersionsAreCompatible == Nothing)
-            then
-                "error"
-
-            else
-                Version.versionToStr version
-    in
-    H.td [ A.css [ C.textAlign C.right ] ]
-        [ H.span
-            ([ A.css style
-             , HE.onMouseOver (MouseOverVersion name version)
-             , HE.onMouseOut (MouseOutVersion name version)
-             ]
-                ++ (if packageNeeded then
-                        [ HE.onClick (VersionClick name version) ]
-
-                    else
-                        []
-                   )
+        hasError =
+            ((model.mouseOverVersion /= Nothing)
+                && not packageHasMouseOver
+                && (isCompatibleWithMouseOver == Nothing)
             )
-            [ H.text text
-            ]
-        ]
+                || (isCompatibleWithSelected == Nothing)
+                || (selectedVersionsAreCompatible == Nothing)
+    in
+    if hasError then
+        Err <|
+            OtherInternalError 3073 <|
+                "Check in viewVersion failed for "
+                    ++ Version.idToStr ( name, version )
+
+    else
+        Ok <|
+            H.td [ A.css [ C.textAlign C.right ] ]
+                [ H.span
+                    ([ A.css style
+                     , HE.onMouseOver (MouseOverVersion name version)
+                     , HE.onMouseOut (MouseOutVersion name version)
+                     ]
+                        ++ (if packageNeeded then
+                                [ HE.onClick (VersionClick name version) ]
+
+                            else
+                                []
+                           )
+                    )
+                    [ H.text <| Version.versionToStr version
+                    ]
+                ]
 
 
 
