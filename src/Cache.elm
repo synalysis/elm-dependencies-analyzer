@@ -463,7 +463,7 @@ validate fetchingCache =
 -}
 cacheUrl : String
 cacheUrl =
-    "https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/cache.php?"
+    "https://www.markuslaire.com/github/elm-dependencies-analyzer/cache.php?"
 
 
 fetchVersions : String -> Cmd FetchedMsg
