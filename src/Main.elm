@@ -5,13 +5,15 @@ import Cache exposing (Cache, FetchedValue(..))
 import Compatible
 import Css as C
 import Dict exposing (Dict)
+import Elm.Package
+import Elm.Project
+import Elm.Version
 import File exposing (File)
 import File.Select
 import Html.Styled as H exposing (Html)
 import Html.Styled.Attributes as A
 import Html.Styled.Events as HE
 import Json.Decode as JD
-import Json.Decode.Field as JF
 import Json.Encode as JE
 import List.Extra as ListExtra
 import Maybe.Extra as MaybeExtra
@@ -192,7 +194,7 @@ update msg model =
 
 updateAnalyzeButtonClick : Model -> ( Model, Cmd Msg )
 updateAnalyzeButtonClick model =
-    case JD.decodeString applicationDependenciesDecoder model.inputJson of
+    case JD.decodeString Elm.Project.decoder model.inputJson of
         Err error ->
             ( { model
                 | packages = Dict.empty
@@ -201,8 +203,40 @@ updateAnalyzeButtonClick model =
             , Cmd.none
             )
 
-        Ok appDepends ->
+        Ok (Elm.Project.Package _) ->
+            ( { model
+                | packages = Dict.empty
+                , state =
+                    JsonParsingError
+                        ("Only application elm.json is supported, not package elm.json.\n"
+                            ++ "If you would find it useful to also support package elm.json,\n"
+                            ++ "please open an issue at GitHub repository."
+                        )
+              }
+            , Cmd.none
+            )
+
+        Ok (Elm.Project.Application appInfo) ->
             let
+                fromElmDeps :
+                    Elm.Project.Deps Elm.Version.Version
+                    -> Bool
+                    -> List ( String, Version, Bool )
+                fromElmDeps deps isDirect =
+                    deps
+                        |> List.map
+                            (\( name, elmVersion ) ->
+                                ( Elm.Package.toString name
+                                , Elm.Version.toTuple elmVersion
+                                , isDirect
+                                )
+                            )
+
+                appDepends : List ( String, Version, Bool )
+                appDepends =
+                    fromElmDeps appInfo.depsDirect True
+                        ++ fromElmDeps appInfo.depsIndirect False
+
                 newPackageCache =
                     appDepends
                         |> List.map
@@ -867,27 +901,6 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
                     [ H.text <| Version.versionToStr version
                     ]
                 ]
-
-
-
--- DECODERS
-
-
-{-| decodes dependencies from application elm.json
--}
-applicationDependenciesDecoder : JD.Decoder (List ( String, Version, Bool ))
-applicationDependenciesDecoder =
-    let
-        helper : Bool -> List VersionId -> List ( String, Version, Bool )
-        helper isDirect =
-            List.map (\( name, version ) -> ( name, version, isDirect ))
-    in
-    JF.requireAt [ "dependencies", "direct" ] (JD.keyValuePairs Version.versionDecoder) <|
-        \direct ->
-            JF.requireAt [ "dependencies", "indirect" ] (JD.keyValuePairs Version.versionDecoder) <|
-                \indirect ->
-                    JD.succeed
-                        (helper True direct ++ helper False indirect)
 
 
 

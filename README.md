@@ -41,7 +41,7 @@ For each package the version in `elm.json` and all newer versions will be shown.
 ## Limitations
 
 - Only application `elm.json` can be analyzed, not package `elm.json`
-  - If you would find it useful to also support package `elm.json`, please open an issue or send me a message.
+  - If you would find it useful to also support package `elm.json`, please open an issue.
 - Test dependencies are ignored.
   - I need to think a bit more how I want to implement this.
 
