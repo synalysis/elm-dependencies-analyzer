@@ -16,7 +16,6 @@ module Cache exposing
 import Dict exposing (Dict)
 import Http
 import Json.Decode as JD
-import Json.Decode.Field as JF
 import Maybe.Extra as MaybeExtra
 import Misc exposing (Error(..), InternalError(..))
 import Monocle.Common
@@ -518,8 +517,8 @@ fetchNextThing fetchingCache =
 -}
 packageDependenciesDecoder : JD.Decoder (Dict String VersionRange)
 packageDependenciesDecoder =
-    JF.require "dependencies" (JD.keyValuePairs Version.versionRangeDecoder) <|
-        (Dict.fromList >> JD.succeed)
+    JD.map Dict.fromList
+        (JD.field "dependencies" (JD.keyValuePairs Version.versionRangeDecoder))
 
 
 {-| decodes <https://package.elm-lang.org/packages/AUTHOR/PROJECT/releases.json>
