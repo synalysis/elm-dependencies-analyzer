@@ -9,7 +9,7 @@ import Cache exposing (Cache)
 import Compatible
 import Dict exposing (Dict)
 import Dict.Extra as DictExtra
-import Package exposing (Package)
+import Misc exposing (Package)
 import StepResult
 import Version exposing (Version, VersionId)
 

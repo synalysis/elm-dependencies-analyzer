@@ -15,11 +15,11 @@ import Json.Decode.Field as JF
 import Json.Encode as JE
 import List.Extra as ListExtra
 import Maybe.Extra as MaybeExtra
+import Misc exposing (Package)
 import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
-import Package exposing (Package)
 import RangeDict exposing (RangeDict)
 import StepResult
 import Task

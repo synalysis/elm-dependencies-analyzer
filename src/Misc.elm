@@ -1,4 +1,4 @@
-module Package exposing (Package)
+module Misc exposing (Package)
 
 import Dict exposing (Dict)
 import Version exposing (Version, VersionRange)
