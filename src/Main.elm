@@ -673,31 +673,50 @@ viewPackages mouseOverVersion cache viewCache packagesSolved =
                                 compare nameA nameB
                     )
 
-        showSection : PackageStateSolved -> List (Result InternalError (Html Msg))
-        showSection section =
-            (allPackagesToShow
-                |> List.filter (\( _, _, section_ ) -> section_ == section)
-                |> List.map
-                    (\( name, package, _ ) ->
-                        viewPackage
-                            { mouseOverVersion = mouseOverVersion
-                            , cache = cache
-                            , viewCache = viewCache
-                            , isTestSection =
-                                section == DirectTest || section == IndirectTest
-                            , package = package
-                            , name = name
-                            }
-                    )
+        showSection : PackageStateSolved -> String -> List (Result InternalError (Html Msg))
+        showSection section emptyText =
+            let
+                sectionPackages =
+                    allPackagesToShow
+                        |> List.filter (\( _, _, section_ ) -> section_ == section)
+            in
+            (if List.isEmpty sectionPackages then
+                [ Ok <|
+                    H.tr []
+                        [ H.td
+                            [ A.colspan 4
+                            , A.css
+                                [ C.fontStyle C.italic
+                                , C.color (C.hex "#888")
+                                ]
+                            ]
+                            [ H.text emptyText ]
+                        ]
+                ]
+
+             else
+                sectionPackages
+                    |> List.map
+                        (\( name, package, _ ) ->
+                            viewPackage
+                                { mouseOverVersion = mouseOverVersion
+                                , cache = cache
+                                , viewCache = viewCache
+                                , isTestSection =
+                                    section == DirectTest || section == IndirectTest
+                                , package = package
+                                , name = name
+                                }
+                        )
             )
                 ++ [ Ok <| H.tr [] [ H.td [ A.colspan 4 ] [ H.hr [] [] ] ] ]
 
         rHtml : Result InternalError (List (Html Msg))
         rHtml =
-            showSection DirectNormal
-                ++ showSection IndirectNormal
-                ++ showSection DirectTest
-                ++ showSection IndirectTest
+            showSection DirectNormal "No direct dependencies."
+                ++ showSection IndirectNormal "No indirect dependencies."
+                ++ showSection DirectTest "No direct test-dependencies."
+                ++ showSection IndirectTest "No indirect test-dependencies."
                 |> ResultExtra.combine
     in
     case rHtml of
