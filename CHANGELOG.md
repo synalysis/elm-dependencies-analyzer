@@ -4,6 +4,7 @@
 - Include test-dependencies
   - Packages are now shown in four sections:
     direct, indirect, test-direct & test-indirect
+- Create and show new `elm.json`, with download option.
 
 ## 2018-12-06
 - Packages are now shown in two sections: direct & indirect

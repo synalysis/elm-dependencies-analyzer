@@ -9,6 +9,7 @@ import Elm.Package
 import Elm.Project
 import Elm.Version
 import File exposing (File)
+import File.Download
 import File.Select
 import Html.Styled as H exposing (Html)
 import Html.Styled.Attributes as A
@@ -40,6 +41,10 @@ type alias Model =
     , inputJson : String
     , mouseOverVersion : Maybe VersionId
     , packages : Dict String Package
+
+    -- WIP
+    , appInfo : Maybe Elm.Project.ApplicationInfo
+    , showElmJson : ShowElmJson
     }
 
 
@@ -51,13 +56,21 @@ type ModelState
     | FetchingFailed (List (Html Msg))
 
 
+type ShowElmJson
+    = ShowOriginal
+    | ShowNew
+    | ShowBoth
+
+
 type Msg
     = InputJsonChanged String
     | ExampleClick
     | OpenFileClick
     | FileOpened File
     | GotFileContents String
+    | DownloadFileClick String String String
     | AnalyzeButtonClick
+    | ShowElmJsonClick ShowElmJson
     | Fetched Cache.FetchedMsg
     | VersionClick String Version
     | IsDirectCheckboxClick String Bool
@@ -88,6 +101,8 @@ init _ =
       , inputJson = ""
       , mouseOverVersion = Nothing
       , packages = Dict.empty
+      , appInfo = Nothing
+      , showElmJson = ShowBoth
       }
     , Cmd.none
     )
@@ -115,8 +130,14 @@ update msg model =
         GotFileContents contents ->
             ( { model | inputJson = contents }, Cmd.none )
 
+        DownloadFileClick filename mime contents ->
+            ( model, File.Download.string filename mime contents )
+
         AnalyzeButtonClick ->
             updateAnalyzeButtonClick model
+
+        ShowElmJsonClick value ->
+            ( { model | showElmJson = value }, Cmd.none )
 
         Fetched fetched ->
             updateFetched model fetched
@@ -333,6 +354,7 @@ updateAnalyzeButtonClick model =
             ( { model
                 | packages = newPackages
                 , state = newState
+                , appInfo = Just appInfo
               }
             , Cmd.map Fetched nextCmd
             )
@@ -513,6 +535,10 @@ addMissingVersionsToDependsCache fetchingCache =
 
 view : Model -> Html Msg
 view model =
+    let
+        ( rightSectionHtml, maybeNewJson ) =
+            viewRightSection model
+    in
     H.table []
         [ H.tr []
             [ H.td [ A.colspan 2 ]
@@ -527,52 +553,118 @@ view model =
             ]
         , H.tr []
             [ H.td [ A.css [ C.verticalAlign C.top ] ]
-                (viewLeftSection model)
+                (viewLeftSection model maybeNewJson)
             , H.td
                 [ A.css [ C.verticalAlign C.top ] ]
-                (viewRightSection model)
+                rightSectionHtml
             ]
         ]
 
 
-viewLeftSection : Model -> List (Html Msg)
-viewLeftSection model =
-    [ H.textarea
-        [ A.rows 40
-        , A.cols 50
-        , HE.onInput InputJsonChanged
-        , A.property "value" (JE.string model.inputJson)
+viewLeftSection : Model -> Maybe String -> List (Html Msg)
+viewLeftSection model maybeNewJson =
+    [ H.table []
+        [ H.tr []
+            ((if model.showElmJson == ShowOriginal || model.showElmJson == ShowBoth then
+                [ H.td []
+                    [ H.textarea
+                        [ A.rows 40
+                        , A.cols 50
+                        , HE.onInput InputJsonChanged
+                        , A.property "value" (JE.string model.inputJson)
+                        ]
+                        []
+                    ]
+                ]
+
+              else
+                []
+             )
+                ++ (if model.showElmJson == ShowNew || model.showElmJson == ShowBoth then
+                        [ H.td []
+                            [ H.textarea
+                                [ A.rows 40
+                                , A.cols 50
+                                , A.property "value" (JE.string <| Maybe.withDefault "" <| maybeNewJson)
+                                , A.readonly True
+                                ]
+                                []
+                            ]
+                        ]
+
+                    else
+                        []
+                   )
+            )
         ]
-        []
-    , H.br [] []
-    , H.button [ HE.onClick OpenFileClick ] [ H.text "Open File ..." ]
-    , H.text " "
-    , H.button [ HE.onClick AnalyzeButtonClick ] [ H.text "Analyze" ]
-    , H.hr [] []
-    , H.button [ HE.onClick ExampleClick ] [ H.text "Load example" ]
+    , H.text "Show elm.json: "
     ]
+        ++ ([ ( "Original", ShowOriginal ), ( "New", ShowNew ), ( "Both", ShowBoth ) ]
+                |> List.concatMap
+                    (\( title, type_ ) ->
+                        [ H.input
+                            [ A.type_ "radio"
+                            , A.id ("showElmJson-" ++ title)
+                            , A.name "showElmJson"
+                            , A.checked (model.showElmJson == type_)
+                            , HE.onClick (ShowElmJsonClick type_)
+                            ]
+                            []
+                        , H.label [ A.for ("showElmJson-" ++ title) ] [ H.text title ]
+                        , H.text " "
+                        ]
+                    )
+           )
+        ++ [ H.br [] []
+           , H.button [ HE.onClick OpenFileClick ] [ H.text "Open File ..." ]
+           , H.text " "
+           , H.button [ HE.onClick AnalyzeButtonClick ] [ H.text "Analyze" ]
+           , H.text " "
+           , H.button
+                ([ A.disabled (maybeNewJson == Nothing) ]
+                    ++ (case maybeNewJson of
+                            Nothing ->
+                                []
+
+                            Just newJson ->
+                                [ HE.onClick (DownloadFileClick "elm.json" "application/json" newJson) ]
+                       )
+                )
+                [ H.text "Download" ]
+           , H.hr [] []
+           , H.button [ HE.onClick ExampleClick ] [ H.text "Load example" ]
+           ]
 
 
-viewRightSection : Model -> List (Html Msg)
+viewRightSection : Model -> ( List (Html Msg), Maybe String )
 viewRightSection model =
     case model.state of
         NothingAnalyzed ->
-            [ H.text "Nothing analyzed yet." ]
+            ( [ H.text "Nothing analyzed yet." ], Nothing )
 
         JsonParsingError error ->
-            [ H.pre [] [ H.text (String.replace "\\n" "\n" error) ] ]
+            ( [ H.pre [] [ H.text (String.replace "\\n" "\n" error) ] ], Nothing )
 
         Fetching done _ ->
-            [ H.text ("Fetching package data ... " ++ String.fromInt done) ]
+            ( [ H.text ("Fetching package data ... " ++ String.fromInt done) ], Nothing )
 
         FetchingFailed errors ->
-            [ H.ul [] errors ]
+            ( [ H.ul [] errors ], Nothing )
 
         FetchingSucceeded cache viewCache ->
-            viewRightSectionWhenFetchingSucceeded model cache viewCache
+            case viewRightSectionWhenFetchingSucceeded model cache viewCache of
+                Err error ->
+                    ( [ H.text <| Misc.internalErrorToStr error ], Nothing )
+
+                Ok ( html, maybeNewJson ) ->
+                    ( html, maybeNewJson )
 
 
-viewRightSectionWhenFetchingSucceeded : Model -> Cache -> ViewCache -> List (Html Msg)
+viewRightSectionWhenFetchingSucceeded :
+    Model
+    -> Cache
+    -> ViewCache
+    -> Result InternalError ( List (Html Msg), Maybe String )
 viewRightSectionWhenFetchingSucceeded model cache viewCache =
     let
         rSolved : Result InternalError ( Dict String PackageSolved, RangeDict )
@@ -581,9 +673,9 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
     in
     case rSolved of
         Err error ->
-            [ H.ul [] [ H.li [] [ H.text <| Misc.internalErrorToStr error ] ] ]
+            Err error
 
-        Ok ( solvedPackages, allDeps ) ->
+        Ok ( packagesSolved, allDeps ) ->
             let
                 problems =
                     RangeDict.getProblems allDeps
@@ -597,36 +689,46 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
                             (problems == []) /= bool
 
                 rPackagesHtml =
-                    viewPackages model.mouseOverVersion cache viewCache solvedPackages
+                    viewPackages model.mouseOverVersion cache viewCache packagesSolved
             in
             case rPackagesHtml of
                 Err error ->
-                    [ H.div [] [ H.text <| Misc.internalErrorToStr error ] ]
+                    Err error
 
                 Ok packagesHtml ->
-                    [ packagesHtml ]
-                        ++ (case problems of
-                                [] ->
-                                    [ H.div
-                                        [ A.css [ C.color (C.hex "080") ] ]
-                                        [ H.text "Selected versions have no conflicts."
+                    let
+                        html =
+                            [ packagesHtml ]
+                                ++ (if List.isEmpty problems then
+                                        [ H.div
+                                            [ A.css [ C.color (C.hex "080") ] ]
+                                            [ H.text "Selected versions have no conflicts."
+                                            ]
                                         ]
-                                    ]
 
-                                nonEmptyProblems ->
-                                    [ H.div
-                                        [ A.css [ C.color (C.hex "800") ] ]
-                                        [ H.text "Selected versions have dependency conflicts:"
-                                        , H.ul [] nonEmptyProblems
+                                    else
+                                        [ H.div
+                                            [ A.css [ C.color (C.hex "800") ] ]
+                                            [ H.text "Selected versions have dependency conflicts:"
+                                            , H.ul [] problems
+                                            ]
                                         ]
-                                    ]
-                           )
-                        ++ (if isInternalInconsistency then
-                                [ H.div [] [ H.text "ERROR: Internal inconsistency detected." ] ]
+                                   )
+                                ++ (if isInternalInconsistency then
+                                        [ H.div [] [ H.text "ERROR: Internal inconsistency detected." ] ]
+
+                                    else
+                                        []
+                                   )
+
+                        maybeNewJson =
+                            if List.isEmpty problems then
+                                createNewJson model.appInfo packagesSolved
 
                             else
-                                []
-                           )
+                                Nothing
+                    in
+                    Ok ( html, maybeNewJson )
 
 
 viewPackages :
@@ -1029,6 +1131,75 @@ solveIndirectPackages cache packages =
             Err error
 
 
+{-| TODO WIP
+-}
+createNewJson : Maybe Elm.Project.ApplicationInfo -> Dict String PackageSolved -> Maybe String
+createNewJson maybeAppInfo packagesSolved =
+    let
+        toElmDeps :
+            List ( String, Version, PackageStateSolved )
+            -> PackageStateSolved
+            -> Elm.Project.Deps Elm.Version.Version
+        toElmDeps packages state =
+            packages
+                |> List.filterMap
+                    (\( name, version, state_ ) ->
+                        if state == state_ then
+                            case Elm.Package.fromString name of
+                                Nothing ->
+                                    -- TODO: ERROR
+                                    Nothing
+
+                                Just elmName ->
+                                    case Elm.Version.fromTuple version of
+                                        Nothing ->
+                                            -- TODO: ERROR
+                                            Nothing
+
+                                        Just elmVersion ->
+                                            Just ( elmName, elmVersion )
+
+                        else
+                            Nothing
+                    )
+
+        sortedPackages =
+            packagesSolved
+                |> Dict.toList
+                |> List.filterMap
+                    (\( name, package ) ->
+                        case package.state of
+                            Just state ->
+                                Just ( name, package.selectedVersion, state )
+
+                            Nothing ->
+                                Nothing
+                    )
+                |> List.sortWith
+                    (\( nameA, _, _ ) ( nameB, _, _ ) ->
+                        compare nameA nameB
+                    )
+    in
+    case maybeAppInfo of
+        Just appInfo ->
+            let
+                newAppInfo =
+                    { elm = appInfo.elm
+                    , dirs = appInfo.dirs
+                    , depsDirect = toElmDeps sortedPackages DirectNormal
+                    , depsIndirect = toElmDeps sortedPackages IndirectNormal
+                    , testDepsDirect = toElmDeps sortedPackages DirectTest
+                    , testDepsIndirect = toElmDeps sortedPackages IndirectTest
+                    }
+            in
+            Elm.Project.encode (Elm.Project.Application newAppInfo)
+                |> JE.encode 4
+                |> Just
+
+        Nothing ->
+            Nothing
+
+
 
 -- MONOCLE - OF PACKAGES
 
@@ -1045,8 +1216,7 @@ selectedVersionOfPackages name =
 
 
 exampleJson =
-    """
-{
+    """{
     "type": "application",
     "source-directories": [
         "src"
@@ -1072,14 +1242,13 @@ exampleJson =
     },
     "test-dependencies": {
         "direct": {
-            "elm-explorations/test" : "1.0.0",
+            "elm-explorations/test": "1.0.0",
             "simonh1000/elm-jwt": "6.0.0"
         },
         "indirect": {
-            "elm/random" : "1.0.0",
+            "elm/random": "1.0.0",
             "elm/regex": "1.0.0",
             "truqu/elm-base64": "2.0.4"
         }
     }
-}
-"""
+}"""
