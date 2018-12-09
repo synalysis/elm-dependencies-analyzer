@@ -1,5 +1,10 @@
 # Changelog
 
+## 2018-12-09
+- Include test-dependencies
+  - Packages are now shown in four sections:
+    direct, indirect, test-direct & test-indirect
+
 ## 2018-12-06
 - Packages are now shown in two sections: direct & indirect
   - Section is based on parsed `elm.json`.

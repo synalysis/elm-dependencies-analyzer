@@ -2,8 +2,12 @@ module Misc exposing
     ( Error(..)
     , InternalError(..)
     , Package
+    , PackageSolved
+    , PackageStateSolved(..)
+    , PackageStateUnsolved(..)
     , errorToStr
     , internalErrorToStr
+    , isDirect
     )
 
 import Version exposing (Version, VersionId)
@@ -20,14 +24,61 @@ import Version exposing (Version, VersionId)
 
 -}
 type alias Package =
-    { isDirect : Bool
+    { state : PackageStateUnsolved
     , selectedVersion : Version
     , initialState :
         Maybe
-            { isDirect : Bool
+            { state : PackageStateSolved
             , version : Version
             }
     }
+
+
+type PackageStateUnsolved
+    = DirectNormal_
+    | DirectTest_
+    | IndirectOrNotNeeded
+
+
+{-| TODO WIP
+
+  - state
+      - `Nothing` means NotNeeded
+
+-}
+type alias PackageSolved =
+    { state : Maybe PackageStateSolved
+    , selectedVersion : Version
+    , initialState :
+        Maybe
+            { state : PackageStateSolved
+            , version : Version
+            }
+    }
+
+
+type PackageStateSolved
+    = DirectNormal
+    | DirectTest
+    | IndirectNormal
+    | IndirectTest
+
+
+
+-- FUNCTIONS - PACKAGE
+
+
+isDirect : Package -> Bool
+isDirect package =
+    case package.state of
+        DirectNormal_ ->
+            True
+
+        DirectTest_ ->
+            True
+
+        IndirectOrNotNeeded ->
+            False
 
 
 

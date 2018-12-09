@@ -91,7 +91,7 @@ updateWithSelectedVersions packages cache viewCache =
     let
         selectedVersions =
             packages
-                |> Dict.map (\_ package -> ( package.selectedVersion, package.isDirect ))
+                |> Dict.map (\_ package -> ( package.selectedVersion, Misc.isDirect package ))
 
         isCompatibleWithDirect =
             cache.versions

@@ -17,13 +17,14 @@ import Json.Decode as JD
 import Json.Encode as JE
 import List.Extra as ListExtra
 import Maybe.Extra as MaybeExtra
-import Misc exposing (InternalError(..), Package)
+import Misc exposing (InternalError(..), Package, PackageSolved, PackageStateSolved(..), PackageStateUnsolved(..))
 import Monocle.Common
 import Monocle.Compose
 import Monocle.Lens exposing (Lens)
 import Monocle.Optional exposing (Optional)
 import RangeDict exposing (RangeDict)
 import Result.Extra as ResultExtra
+import Set exposing (Set)
 import StepResult
 import Task
 import Version exposing (Version, VersionId, VersionRange)
@@ -59,7 +60,7 @@ type Msg
     | AnalyzeButtonClick
     | Fetched Cache.FetchedMsg
     | VersionClick String Version
-    | IsDirectCheckboxClick String
+    | IsDirectCheckboxClick String Bool
     | MouseOverVersion String Version
     | MouseOutVersion String Version
 
@@ -142,27 +143,48 @@ update msg model =
             , Cmd.none
             )
 
-        IsDirectCheckboxClick name ->
-            let
-                newPackages =
-                    model.packages
-                        |> modifyIsDirectOfPackages name not
+        IsDirectCheckboxClick name isTestSection ->
+            case model.state of
+                FetchingSucceeded cache viewCache ->
+                    let
+                        newPackages =
+                            case Dict.get name model.packages of
+                                Nothing ->
+                                    -- IMPOSSIBLE
+                                    model.packages
 
-                newState =
-                    case model.state of
-                        FetchingSucceeded cache viewCache ->
+                                Just package ->
+                                    let
+                                        newPackage =
+                                            { package
+                                                | state =
+                                                    case ( Misc.isDirect package, isTestSection ) of
+                                                        ( False, False ) ->
+                                                            DirectNormal_
+
+                                                        ( False, True ) ->
+                                                            DirectTest_
+
+                                                        ( True, _ ) ->
+                                                            IndirectOrNotNeeded
+                                            }
+                                    in
+                                    Dict.insert name newPackage model.packages
+
+                        newState =
                             ViewCache.updateWithSelectedVersions newPackages cache viewCache
                                 |> FetchingSucceeded cache
+                    in
+                    ( { model
+                        | state = newState
+                        , packages = newPackages
+                      }
+                    , Cmd.none
+                    )
 
-                        other ->
-                            other
-            in
-            ( { model
-                | state = newState
-                , packages = newPackages
-              }
-            , Cmd.none
-            )
+                _ ->
+                    -- IMPOSSIBLE
+                    ( model, Cmd.none )
 
         MouseOverVersion name version ->
             let
@@ -220,27 +242,28 @@ updateAnalyzeButtonClick model =
             let
                 fromElmDeps :
                     Elm.Project.Deps Elm.Version.Version
-                    -> Bool
-                    -> List ( String, Version, Bool )
-                fromElmDeps deps isDirect =
+                    -> PackageStateSolved
+                    -> List ( String, Version, PackageStateSolved )
+                fromElmDeps deps state =
                     deps
                         |> List.map
                             (\( name, elmVersion ) ->
                                 ( Elm.Package.toString name
                                 , Elm.Version.toTuple elmVersion
-                                , isDirect
+                                , state
                                 )
                             )
 
-                appDepends : List ( String, Version, Bool )
                 appDepends =
-                    fromElmDeps appInfo.depsDirect True
-                        ++ fromElmDeps appInfo.depsIndirect False
+                    fromElmDeps appInfo.depsDirect DirectNormal
+                        ++ fromElmDeps appInfo.depsIndirect IndirectNormal
+                        ++ fromElmDeps appInfo.testDepsDirect DirectTest
+                        ++ fromElmDeps appInfo.testDepsIndirect IndirectTest
 
                 newPackageCache =
                     appDepends
                         |> List.map
-                            (\( name, version, isDirect ) ->
+                            (\( name, version, _ ) ->
                                 ( name
                                 , { allVersions = NotFetched
                                   , minVersion = version
@@ -253,13 +276,25 @@ updateAnalyzeButtonClick model =
                 newPackages =
                     appDepends
                         |> List.map
-                            (\( name, version, isDirect ) ->
+                            (\( name, version, state ) ->
                                 ( name
-                                , { isDirect = isDirect
+                                , { state =
+                                        case state of
+                                            DirectNormal ->
+                                                DirectNormal_
+
+                                            DirectTest ->
+                                                DirectTest_
+
+                                            IndirectNormal ->
+                                                IndirectOrNotNeeded
+
+                                            IndirectTest ->
+                                                IndirectOrNotNeeded
                                   , selectedVersion = version
                                   , initialState =
                                         Just
-                                            { isDirect = isDirect
+                                            { state = state
                                             , version = version
                                             }
                                   }
@@ -383,7 +418,7 @@ updateFetched model fetched =
                                     Just latestVersion ->
                                         Dict.insert
                                             name
-                                            { isDirect = False
+                                            { state = IndirectOrNotNeeded
                                             , selectedVersion = latestVersion
                                             , initialState = Nothing
                                             }
@@ -540,20 +575,18 @@ viewRightSection model =
 viewRightSectionWhenFetchingSucceeded : Model -> Cache -> ViewCache -> List (Html Msg)
 viewRightSectionWhenFetchingSucceeded model cache viewCache =
     let
-        -- TODO: maybe merge into rangeDictOfDepends
-        allPackages : Dict String ( Version, Bool )
-        allPackages =
-            model.packages
-                |> Dict.map (\_ package -> ( package.selectedVersion, package.isDirect ))
+        rSolved : Result InternalError ( Dict String PackageSolved, RangeDict )
+        rSolved =
+            solveIndirectPackages cache model.packages
     in
-    case Cache.rangeDictOfDepends cache.depends allPackages of
+    case rSolved of
         Err error ->
             [ H.ul [] [ H.li [] [ H.text <| Misc.internalErrorToStr error ] ] ]
 
-        Ok deps ->
+        Ok ( solvedPackages, allDeps ) ->
             let
                 problems =
-                    RangeDict.getProblems deps
+                    RangeDict.getProblems allDeps
 
                 isInternalInconsistency =
                     case viewCache.selectedVersionsAreCompatible of
@@ -564,7 +597,7 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
                             (problems == []) /= bool
 
                 rPackagesHtml =
-                    viewPackages model cache viewCache deps
+                    viewPackages model.mouseOverVersion cache viewCache solvedPackages
             in
             case rPackagesHtml of
                 Err error ->
@@ -596,25 +629,35 @@ viewRightSectionWhenFetchingSucceeded model cache viewCache =
                            )
 
 
-viewPackages : Model -> Cache -> ViewCache -> RangeDict -> Result InternalError (Html Msg)
-viewPackages model cache viewCache deps =
+viewPackages :
+    Maybe VersionId
+    -> Cache
+    -> ViewCache
+    -> Dict String PackageSolved
+    -> Result InternalError (Html Msg)
+viewPackages mouseOverVersion cache viewCache packagesSolved =
     let
         allPackagesToShow =
-            model.packages
+            packagesSolved
                 |> Dict.toList
-                |> List.filter
+                |> List.filterMap
                     (\( name, package ) ->
-                        if package.initialState /= Nothing then
-                            True
+                        -- packages of parsed elm.json are shown in sections according to
+                        -- initialState ; new packages according to current state
+                        case package.initialState of
+                            Just initialState ->
+                                Just ( name, package, initialState.state )
 
-                        else if package.isDirect then
-                            True
+                            Nothing ->
+                                case package.state of
+                                    Just state ->
+                                        Just ( name, package, state )
 
-                        else
-                            RangeDict.hasRange name deps
+                                    Nothing ->
+                                        Nothing
                     )
                 |> List.sortWith
-                    (\( nameA, packageA ) ( nameB, packageB ) ->
+                    (\( nameA, packageA, _ ) ( nameB, packageB, _ ) ->
                         -- sort new packages last
                         case ( packageA.initialState, packageB.initialState ) of
                             ( Just _, Nothing ) ->
@@ -630,45 +673,31 @@ viewPackages model cache viewCache deps =
                                 compare nameA nameB
                     )
 
-        -- packages of parsed elm.json are shown in direct/indirect sections
-        -- according to initialState ; new packages according to current state
-        showInDirectSection package =
-            case package.initialState of
-                Just initialState ->
-                    initialState.isDirect
-
-                Nothing ->
-                    package.isDirect
-
-        directSection =
-            allPackagesToShow
-                |> List.filter (Tuple.second >> showInDirectSection)
-
-        indirectSection =
-            allPackagesToShow
-                |> List.filter (Tuple.second >> showInDirectSection >> not)
-
-        showSection : List ( String, Package ) -> List (Result InternalError (Html Msg))
+        showSection : PackageStateSolved -> List (Result InternalError (Html Msg))
         showSection section =
-            section
+            (allPackagesToShow
+                |> List.filter (\( _, _, section_ ) -> section_ == section)
                 |> List.map
-                    (\( name, package ) ->
+                    (\( name, package, _ ) ->
                         viewPackage
-                            { model = model
+                            { mouseOverVersion = mouseOverVersion
                             , cache = cache
                             , viewCache = viewCache
-                            , deps = deps
+                            , isTestSection =
+                                section == DirectTest || section == IndirectTest
                             , package = package
                             , name = name
                             }
                     )
+            )
+                ++ [ Ok <| H.tr [] [ H.td [ A.colspan 4 ] [ H.hr [] [] ] ] ]
 
         rHtml : Result InternalError (List (Html Msg))
         rHtml =
-            showSection directSection
-                ++ [ Ok <| H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
-                ++ showSection indirectSection
-                ++ [ Ok <| H.tr [] [ H.td [] [ H.hr [] [] ] ] ]
+            showSection DirectNormal
+                ++ showSection IndirectNormal
+                ++ showSection DirectTest
+                ++ showSection IndirectTest
                 |> ResultExtra.combine
     in
     case rHtml of
@@ -680,15 +709,15 @@ viewPackages model cache viewCache deps =
 
 
 viewPackage :
-    { model : Model
+    { mouseOverVersion : Maybe VersionId
     , cache : Cache
     , viewCache : ViewCache
-    , deps : RangeDict
-    , package : Package
+    , isTestSection : Bool
+    , package : PackageSolved
     , name : String
     }
     -> Result InternalError (Html Msg)
-viewPackage { model, cache, viewCache, deps, package, name } =
+viewPackage { mouseOverVersion, cache, viewCache, isTestSection, package, name } =
     let
         packageLink =
             if String.left 8 name == "example/" then
@@ -702,18 +731,26 @@ viewPackage { model, cache, viewCache, deps, package, name } =
                     ]
                     [ H.text "src" ]
 
-        packageNeeded =
-            package.isDirect || RangeDict.hasRange name deps
+        isTestHtml =
+            if package.state == Just DirectTest || package.state == Just IndirectTest then
+                H.span [ A.css [ C.color (C.hex "00A"), C.fontSize C.smaller ] ]
+                    [ H.text "TEST" ]
+
+            else
+                H.span [] []
+
+        isDirect =
+            package.state == Just DirectNormal || package.state == Just DirectTest
 
         nameStyleColor =
-            if package.isDirect then
+            if isDirect then
                 []
 
             else
                 [ C.color (C.hex "#888") ]
 
         nameStyleStrike =
-            if not packageNeeded then
+            if package.state == Nothing then
                 [ C.textDecoration3 C.lineThrough C.solid (C.hex "#000") ]
 
             else
@@ -724,11 +761,10 @@ viewPackage { model, cache, viewCache, deps, package, name } =
 
         rPackageVersionsHtml =
             viewPackageVersions
-                { model = model
+                { mouseOverVersion = mouseOverVersion
                 , cache = cache
                 , viewCache = viewCache
                 , package = package
-                , packageNeeded = packageNeeded
                 , name = name
                 }
     in
@@ -739,23 +775,25 @@ viewPackage { model, cache, viewCache, deps, package, name } =
         Ok packageVersionsHtml ->
             Ok <|
                 H.tr []
-                    ([ H.td []
-                        ([ packageLink
-                         , H.input
+                    ([ H.td [] [ packageLink ]
+                     , H.td []
+                        [ H.input
                             [ A.type_ "checkbox"
-                            , A.checked package.isDirect
-                            , HE.on "change" (JD.succeed (IsDirectCheckboxClick name))
+                            , A.checked isDirect
+                            , HE.on "change" (JD.succeed (IsDirectCheckboxClick name isTestSection))
                             ]
                             []
-                         ]
-                            ++ (if package.initialState == Nothing then
-                                    [ H.span [ A.css [ C.color (C.hex "00A"), C.fontSize C.smaller ] ]
-                                        [ H.text "NEW " ]
-                                    ]
+                        ]
+                     , H.td [] [ isTestHtml ]
+                     , H.td []
+                        ((if package.initialState == Nothing then
+                            [ H.span [ A.css [ C.color (C.hex "00A"), C.fontSize C.smaller ] ]
+                                [ H.text "NEW " ]
+                            ]
 
-                                else
-                                    []
-                               )
+                          else
+                            []
+                         )
                             ++ [ H.span [ A.css nameStyle ] [ H.text name ] ]
                         )
                      ]
@@ -764,26 +802,24 @@ viewPackage { model, cache, viewCache, deps, package, name } =
 
 
 viewPackageVersions :
-    { model : Model
+    { mouseOverVersion : Maybe VersionId
     , cache : Cache
     , viewCache : ViewCache
-    , package : Package
-    , packageNeeded : Bool
+    , package : PackageSolved
     , name : String
     }
     -> Result InternalError (List (Html Msg))
-viewPackageVersions { model, cache, viewCache, package, packageNeeded, name } =
+viewPackageVersions { mouseOverVersion, cache, viewCache, package, name } =
     case Dict.get name cache.versions of
         Just versions ->
             versions
                 |> List.map
                     (\( version, _ ) ->
                         viewVersion
-                            { model = model
+                            { mouseOverVersion = mouseOverVersion
                             , cache = cache
                             , viewCache = viewCache
                             , package = package
-                            , packageNeeded = packageNeeded
                             , name = name
                             , version = version
                             }
@@ -795,22 +831,21 @@ viewPackageVersions { model, cache, viewCache, package, packageNeeded, name } =
 
 
 viewVersion :
-    { model : Model
+    { mouseOverVersion : Maybe VersionId
     , cache : Cache
     , viewCache : ViewCache
-    , package : Package
-    , packageNeeded : Bool
+    , package : PackageSolved
     , name : String
     , version : Version
     }
     -> Result InternalError (Html Msg)
-viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
+viewVersion { mouseOverVersion, cache, viewCache, package, name, version } =
     let
         versionHasMouseOver =
-            model.mouseOverVersion == Just ( name, version )
+            mouseOverVersion == Just ( name, version )
 
         packageHasMouseOver =
-            case model.mouseOverVersion of
+            case mouseOverVersion of
                 Just ( moName, _ ) ->
                     moName == name
 
@@ -818,7 +853,7 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
                     False
 
         isCompatibleWithMouseOver =
-            case model.mouseOverVersion of
+            case mouseOverVersion of
                 Just moVersionId ->
                     Dict.get ( ( name, version ), moVersionId ) viewCache.pairIsCompatible
                         |> MaybeExtra.join
@@ -833,12 +868,15 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
             Dict.get ( name, version ) viewCache.isCompatibleWithSelected
                 |> MaybeExtra.join
 
+        isDirect =
+            package.state == Just DirectNormal || package.state == Just DirectTest
+
         styleBase =
             [ C.borderRadius (C.em 0.2)
             ]
 
         styleColor =
-            if package.isDirect then
+            if isDirect then
                 [ C.color (C.hex "000") ]
 
             else
@@ -857,7 +895,7 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
                 [ C.border3 (C.px 2) C.solid (C.hex "#0000") ]
 
         styleBgColor =
-            if version == package.selectedVersion && packageNeeded then
+            if version == package.selectedVersion && package.state /= Nothing then
                 [ C.backgroundColor (C.hex "CCE") ]
 
             else if selectedVersionsAreCompatible == Just True && isCompatibleWithSelected == Just False then
@@ -870,7 +908,7 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
             styleBase ++ styleColor ++ styleBorder ++ styleBgColor
 
         hasError =
-            ((model.mouseOverVersion /= Nothing)
+            ((mouseOverVersion /= Nothing)
                 && not packageHasMouseOver
                 && (isCompatibleWithMouseOver == Nothing)
             )
@@ -891,7 +929,7 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
                      , HE.onMouseOver (MouseOverVersion name version)
                      , HE.onMouseOut (MouseOutVersion name version)
                      ]
-                        ++ (if packageNeeded then
+                        ++ (if package.state /= Nothing then
                                 [ HE.onClick (VersionClick name version) ]
 
                             else
@@ -904,6 +942,75 @@ viewVersion { model, cache, viewCache, package, packageNeeded, name, version } =
 
 
 
+-- VIEW - HELPERS
+
+
+{-| TODO WIP
+-}
+solveIndirectPackages :
+    Cache
+    -> Dict String Package
+    -> Result InternalError ( Dict String PackageSolved, RangeDict )
+solveIndirectPackages cache packages =
+    let
+        rAllDeps =
+            packages
+                |> Dict.map (\_ package -> ( package.selectedVersion, Misc.isDirect package ))
+                |> Cache.rangeDictOfDepends cache.depends
+
+        rNonTestDeps =
+            packages
+                |> Dict.map (\_ package -> ( package.selectedVersion, package.state == DirectNormal_ ))
+                |> Cache.rangeDictOfDepends cache.depends
+    in
+    case ( rAllDeps, rNonTestDeps ) of
+        ( Ok allDeps, Ok nonTestDeps ) ->
+            let
+                neededPackages =
+                    allDeps |> RangeDict.ranges |> Dict.keys |> Set.fromList
+
+                indirectTestPackages =
+                    Set.diff
+                        neededPackages
+                        (nonTestDeps |> RangeDict.ranges |> Dict.keys |> Set.fromList)
+
+                solvedPackages =
+                    packages
+                        |> Dict.map
+                            (\name package ->
+                                let
+                                    stateSolved =
+                                        if package.state == DirectNormal_ then
+                                            Just DirectNormal
+
+                                        else if package.state == DirectTest_ then
+                                            Just DirectTest
+
+                                        else if Set.member name indirectTestPackages then
+                                            Just IndirectTest
+
+                                        else if Set.member name neededPackages then
+                                            Just IndirectNormal
+
+                                        else
+                                            Nothing
+                                in
+                                { state = stateSolved
+                                , selectedVersion = package.selectedVersion
+                                , initialState = package.initialState
+                                }
+                            )
+            in
+            Ok ( solvedPackages, allDeps )
+
+        ( Err error, _ ) ->
+            Err error
+
+        ( _, Err error ) ->
+            Err error
+
+
+
 -- MONOCLE - OF PACKAGES
 
 
@@ -912,22 +1019,6 @@ selectedVersionOfPackages name =
     Monocle.Common.dict name
         |> Monocle.Compose.optionalWithLens
             (Lens .selectedVersion (\b a -> { a | selectedVersion = b }))
-
-
-isDirectOfPackages : String -> Optional (Dict String Package) Bool
-isDirectOfPackages name =
-    Monocle.Common.dict name
-        |> Monocle.Compose.optionalWithLens
-            (Lens .isDirect (\b a -> { a | isDirect = b }))
-
-
-modifyIsDirectOfPackages :
-    String
-    -> (Bool -> Bool)
-    -> Dict String Package
-    -> Dict String Package
-modifyIsDirectOfPackages name fn =
-    Monocle.Optional.modify (isDirectOfPackages name) fn
 
 
 
@@ -950,22 +1041,26 @@ exampleJson =
             "elm/http": "1.0.0",
             "elm/json": "1.0.0",
             "krisajenkins/remotedata": "5.0.0",
-            "rtfeldman/elm-css": "15.0.0",
-            "simonh1000/elm-jwt": "6.0.0"
+            "rtfeldman/elm-css": "15.0.0"
         },
         "indirect": {
             "Skinney/murmur3": "2.0.7",
-            "elm/regex": "1.0.0",
             "elm/time": "1.0.0",
             "elm/url": "1.0.0",
             "elm/virtual-dom": "1.0.0",
-            "rtfeldman/elm-hex": "1.0.0",
-            "truqu/elm-base64": "2.0.4"
+            "rtfeldman/elm-hex": "1.0.0"
         }
     },
     "test-dependencies": {
-        "direct": {},
-        "indirect": {}
+        "direct": {
+            "elm-explorations/test" : "1.0.0",
+            "simonh1000/elm-jwt": "6.0.0"
+        },
+        "indirect": {
+            "elm/random" : "1.0.0",
+            "elm/regex": "1.0.0",
+            "truqu/elm-base64": "2.0.4"
+        }
     }
 }
 """

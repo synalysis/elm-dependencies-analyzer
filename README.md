@@ -16,22 +16,28 @@ Live version: https://www.markuslaire.com/github/elm-dependencies-analyzer/
    - Loaded information is cached for 24 hours in browser and in backend cache.
      If cache has become stale, loading can take a moment while cache is being refreshed, but subsequent loads will go faster.
 
-### Selected versions
-
 Once `elm.json` has been analyzed, table on right will show all relevant packages.
 For each package the version in `elm.json` and all newer versions will be shown.
 
-- Selected version of each package is shown with blue background. To change selected version, click on any other version.
-  - If there are any dependency conflicts with selected versions, those are listed under the table.
-  - If there are no conflicts with selected versions,
-    then any non-selected version which is incompatible with selected versions, will be shown with red background.
+### Packages
 
-- Direct packages are shown with black text, while indirect packages have gray text.
-  - Press checkbox before package name to change whether package is considered direct package or not.
-  - Packages which are mentioned in `elm.json`,
-    but not needed by current direct packages, are marked with strikethrough.
-  - Additional packages which are not mentioned in `elm.json`,
-    are listed at end of each section.
+- Packages are shown in four sections based on `elm.json`:
+  direct, indirect, test-direct and test-indirect
+- Direct packages have checkmark and black font color.
+- Indirect packages have gray font color.
+- Use checkboxes to change whether package is considered direct package or not.
+- Test-dependencies are marked with `TEST`.
+- Packages which are mentioned in `elm.json`,
+  but not needed by current direct packages, are marked with strikethrough.
+- Additional packages which are not mentioned in `elm.json`,
+  are marked with `NEW` and listed at end of each section.
+
+### Selected versions
+
+- Selected version of each package is shown with blue background. To change selected version, click on any other version.
+- If there are any dependency conflicts with selected versions, those are listed under the table.
+- If there are no conflicts with selected versions,
+  then any non-selected version which is incompatible with selected versions, will be shown with red background.
 
 ### Incompatible versions
 
@@ -40,10 +46,9 @@ For each package the version in `elm.json` and all newer versions will be shown.
 
 ## Limitations
 
-- Only application `elm.json` can be analyzed, not package `elm.json`
+- Only application `elm.json` can be analyzed, not package `elm.json`.
   - If you would find it useful to also support package `elm.json`, please open an issue.
-- Test dependencies are ignored.
-  - I need to think a bit more how I want to implement this.
+- Moving packages between normal/test dependencies is not fully supported yet.
 
 ## Building
 
