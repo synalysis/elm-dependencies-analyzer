@@ -577,8 +577,28 @@ addMissingVersionsToDependsCache fetchingCache =
 view : Model -> Html Msg
 view model =
     let
-        ( rightSectionHtml, maybeNewJson ) =
-            viewRightSection model
+        content =
+            case model.preViewInternalError of
+                Nothing ->
+                    let
+                        ( rightSectionHtml, maybeNewJson ) =
+                            viewRightSection model
+                    in
+                    H.tr []
+                        [ H.td [ A.css [ C.verticalAlign C.top ] ]
+                            (viewLeftSection model maybeNewJson)
+                        , H.td
+                            [ A.css [ C.verticalAlign C.top ] ]
+                            rightSectionHtml
+                        ]
+
+                Just preViewInternalError ->
+                    H.tr []
+                        [ H.td [ A.css [ C.color (C.hex "800"), C.fontWeight C.bold ] ]
+                            [ H.br [] []
+                            , H.text <| Misc.internalErrorToStr preViewInternalError
+                            ]
+                        ]
     in
     H.table []
         [ H.tr []
@@ -592,13 +612,7 @@ view model =
                 , H.text " for usage instructions."
                 ]
             ]
-        , H.tr []
-            [ H.td [ A.css [ C.verticalAlign C.top ] ]
-                (viewLeftSection model maybeNewJson)
-            , H.td
-                [ A.css [ C.verticalAlign C.top ] ]
-                rightSectionHtml
-            ]
+        , content
         ]
 
 

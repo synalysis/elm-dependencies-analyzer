@@ -141,7 +141,7 @@ validateForView viewCache =
         Just <| OtherInternalError 3917 "selectedVersionsAreCompatible == Nothing"
 
     else
-        Just <| OtherInternalError 1120 "TODO"
+        Nothing
 
 
 
