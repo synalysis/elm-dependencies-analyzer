@@ -68,7 +68,7 @@ type Msg
     | OpenFileClick
     | FileOpened File
     | GotFileContents String
-    | DownloadFileClick String String String
+    | SaveFileClick String String String
     | AnalyzeButtonClick
     | ShowElmJsonClick ShowElmJson
     | Fetched Cache.FetchedMsg
@@ -130,7 +130,7 @@ update msg model =
         GotFileContents contents ->
             ( { model | inputJson = contents }, Cmd.none )
 
-        DownloadFileClick filename mime contents ->
+        SaveFileClick filename mime contents ->
             ( model, File.Download.string filename mime contents )
 
         AnalyzeButtonClick ->
@@ -627,10 +627,10 @@ viewLeftSection model maybeNewJson =
                                 []
 
                             Just newJson ->
-                                [ HE.onClick (DownloadFileClick "elm.json" "application/json" newJson) ]
+                                [ HE.onClick (SaveFileClick "elm.json" "application/json" newJson) ]
                        )
                 )
-                [ H.text "Download" ]
+                [ H.text "Save File ..." ]
            , H.hr [] []
            , H.button [ HE.onClick ExampleClick ] [ H.text "Load example" ]
            ]
