@@ -41,6 +41,7 @@ type alias Model =
     , inputJson : String
     , mouseOverVersion : Maybe VersionId
     , packages : Dict String Package
+    , preViewInternalError : Maybe InternalError
 
     -- WIP
     , appInfo : Maybe Elm.Project.ApplicationInfo
@@ -101,6 +102,7 @@ init _ =
       , inputJson = ""
       , mouseOverVersion = Nothing
       , packages = Dict.empty
+      , preViewInternalError = Nothing
       , appInfo = Nothing
       , showElmJson = ShowBoth
       }
@@ -112,8 +114,47 @@ init _ =
 -- UPDATE
 
 
+{-| Main part of update is done in `updateMain`.
+After that has been done, `updatePreView` performs some data integrity checks
+and data pre-generation for next view.
+-}
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        ( newModel, updateCmd ) =
+            updateMain msg model
+
+        ( preViewInternalError, preViewCmd ) =
+            updatePreView newModel
+    in
+    ( { newModel | preViewInternalError = preViewInternalError }
+    , Cmd.batch [ updateCmd, preViewCmd ]
+    )
+
+
+updatePreView : Model -> ( Maybe InternalError, Cmd Msg )
+updatePreView model =
+    let
+        viewCacheCheck : Maybe InternalError
+        viewCacheCheck =
+            case model.state of
+                FetchingSucceeded cache viewCache ->
+                    ViewCache.validateForView viewCache
+
+                _ ->
+                    Nothing
+
+        -- This is re-determined on every `update`, so previous state is just ignored.
+        preViewInternalError =
+            viewCacheCheck
+    in
+    ( preViewInternalError
+    , Cmd.none
+    )
+
+
+updateMain : Msg -> Model -> ( Model, Cmd Msg )
+updateMain msg model =
     case msg of
         InputJsonChanged inputJson ->
             ( { model | inputJson = inputJson }, Cmd.none )
@@ -982,9 +1023,6 @@ viewVersion { mouseOverVersion, cache, viewCache, package, name, version } =
                 Nothing ->
                     Nothing
 
-        selectedVersionsAreCompatible =
-            viewCache.selectedVersionsAreCompatible
-
         isCompatibleWithSelected =
             Dict.get ( name, version ) viewCache.isCompatibleWithSelected
                 |> MaybeExtra.join
@@ -1019,7 +1057,10 @@ viewVersion { mouseOverVersion, cache, viewCache, package, name, version } =
             if version == package.selectedVersion && package.state /= Nothing then
                 [ C.backgroundColor (C.hex "CCE") ]
 
-            else if selectedVersionsAreCompatible == Just True && isCompatibleWithSelected == Just False then
+            else if
+                (viewCache.selectedVersionsAreCompatible == Just True)
+                    && (isCompatibleWithSelected == Just False)
+            then
                 [ C.backgroundColor (C.hex "FBB") ]
 
             else
@@ -1034,7 +1075,6 @@ viewVersion { mouseOverVersion, cache, viewCache, package, name, version } =
                 && (isCompatibleWithMouseOver == Nothing)
             )
                 || (isCompatibleWithSelected == Nothing)
-                || (selectedVersionsAreCompatible == Nothing)
     in
     if hasError then
         Err <|

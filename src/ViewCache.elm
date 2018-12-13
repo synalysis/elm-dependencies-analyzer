@@ -3,13 +3,14 @@ module ViewCache exposing
     , new
     , updateWithMouseOverVersion
     , updateWithSelectedVersions
+    , validateForView
     )
 
 import Cache exposing (Cache)
 import Compatible
 import Dict exposing (Dict)
 import Dict.Extra as DictExtra
-import Misc exposing (Package)
+import Misc exposing (InternalError(..), Package)
 import StepResult
 import Version exposing (Version, VersionId)
 
@@ -122,6 +123,25 @@ updateWithSelectedVersions packages cache viewCache =
                 |> Compatible.stepAllState cache
                 |> crStateToMaybeBool
     }
+
+
+
+-- CHECK
+
+
+{-| Check that `ViewCache` has everything needed for next `view`.
+
+This is called from `updatePreView`, when Model has been updated and
+everything should be ready for next `view`.
+
+-}
+validateForView : ViewCache -> Maybe InternalError
+validateForView viewCache =
+    if viewCache.selectedVersionsAreCompatible == Nothing then
+        Just <| OtherInternalError 3917 "selectedVersionsAreCompatible == Nothing"
+
+    else
+        Just <| OtherInternalError 1120 "TODO"
 
 
 
