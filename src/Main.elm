@@ -164,13 +164,22 @@ updatePreView model =
     ( maybePreViewInternalError
     , case maybePreViewInternalError of
         Just preViewInternalError ->
-            -- only report if this tag hasn't been seen yet
-            if not <| Set.member (Misc.internalErrorTag preViewInternalError) model.seenInternalErrors then
-                -- TODO: send some info instead of JE.null
-                Backend.reportInternalError NoOp preViewInternalError JE.null
+            case model.appInfo of
+                Just appInfo ->
+                    -- only report if this tag hasn't been seen yet
+                    if not <| Set.member (Misc.internalErrorTag preViewInternalError) model.seenInternalErrors then
+                        Backend.reportInternalError NoOp
+                            preViewInternalError
+                            appInfo
+                            model.packages
+                            model.mouseOverVersion
 
-            else
-                Cmd.none
+                    else
+                        Cmd.none
+
+                Nothing ->
+                    -- IMPOSSIBLE
+                    Cmd.none
 
         Nothing ->
             Cmd.none

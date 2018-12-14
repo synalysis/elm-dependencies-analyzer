@@ -6,12 +6,13 @@ module Backend exposing
     )
 
 import Dict exposing (Dict)
+import Elm.Project
 import Http
 import Json.Decode as JD
 import Json.Encode as JE
-import Misc exposing (InternalError)
+import Misc exposing (InternalError, Package, PackageStateUnsolved(..))
 import Parser as P
-import Version exposing (Version, VersionRange)
+import Version exposing (Version, VersionId, VersionRange)
 
 
 
@@ -79,8 +80,14 @@ fetchDepends name version =
         }
 
 
-reportInternalError : noOpMsg -> InternalError -> JE.Value -> Cmd noOpMsg
-reportInternalError noOpMsg internalError info =
+reportInternalError :
+    noOpMsg
+    -> InternalError
+    -> Elm.Project.ApplicationInfo
+    -> Dict String Package
+    -> Maybe VersionId
+    -> Cmd noOpMsg
+reportInternalError noOpMsg internalError elmJson packages mouseOverVersion =
     case logErrorUrl of
         Just logErrorUrl_ ->
             Http.post
@@ -89,7 +96,46 @@ reportInternalError noOpMsg internalError info =
                     JE.object
                         [ ( "tag", JE.int <| Misc.internalErrorTag internalError )
                         , ( "error", JE.string <| Misc.internalErrorToStr internalError )
-                        , ( "info", info )
+                        , ( "elmJson"
+                          , { elmJson | dirs = [] }
+                                |> Elm.Project.Application
+                                |> Elm.Project.encode
+                          )
+                        , ( "packages"
+                          , packages
+                                |> Dict.toList
+                                |> JE.list
+                                    (\( name, package ) ->
+                                        JE.object
+                                            [ ( "package", JE.string name )
+                                            , ( "isDirect"
+                                              , case package.state of
+                                                    DirectNormal_ ->
+                                                        JE.bool True
+
+                                                    DirectTest_ ->
+                                                        JE.bool True
+
+                                                    IndirectOrNotNeeded ->
+                                                        JE.bool False
+                                              )
+                                            , ( "selectedVersion"
+                                              , JE.string <| Version.versionToStr package.selectedVersion
+                                              )
+                                            ]
+                                    )
+                          )
+                        , ( "mouseOverVersion"
+                          , case mouseOverVersion of
+                                Just ( name, version ) ->
+                                    JE.object
+                                        [ ( "package", JE.string name )
+                                        , ( "version", JE.string <| Version.versionToStr version )
+                                        ]
+
+                                Nothing ->
+                                    JE.null
+                          )
                         ]
                         |> JE.encode 4
                         |> Http.stringBody "application/json"
