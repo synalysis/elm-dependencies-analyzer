@@ -1,12 +1,10 @@
 <?php
+require_once dirname(__FILE__) . '/config.php';
 
 # ================================================================================
 # CONSTANTS
 
-const DIR_CACHE         = "/var/www/com.markuslaire/cache/elm-dependencies-analyzer";
-const DIR_LOG           = "/var/www/com.markuslaire/log/elm-dependencies-analyzer";
-
-const PATH_ALL_PACKAGES = DIR_CACHE . '/all.json';
+const PATH_ALL_PACKAGES = config\DIR_CACHE . '/all.json';
 const URL_ALL_PACKAGES  = "https://package.elm-lang.org/all-packages";
 
 /*
@@ -247,7 +245,7 @@ function RemoteLog($beginFloatTime, $type, $status, $logId) {
 # -------=========-------------------------------------------
     list ($usecAsSec, $sec) = explode(" ", microtime());
     $usec    = intval($usecAsSec * 1000 * 1000);
-    $logFile = DIR_LOG . '/' . gmdate("Y-m-d", $sec);
+    $logFile = config\DIR_LOG . '/' . gmdate("Y-m-d", $sec);
     $logLine = sprintf("%s.%06s  %5s  %5s %s  %s %s\n",
         gmdate("Y-m-d H:i:s", $sec),
         $usec,
@@ -305,13 +303,13 @@ function Serve($author, $project, $version = null) {
 
     if ($version === null) {
         $logId        = "$author/$project";
-        $filePath     = DIR_CACHE . "/$author/$project/releases.json";
+        $filePath     = config\DIR_CACHE . "/$author/$project/releases.json";
         $remoteUrl    = "https://package.elm-lang.org/packages/$author/$project/releases.json";
         $remoteExpiry = REMOTE_NORMAL_EXPIRY_SECONDS;
 
     } else {
         $logId        = "$author/$project/$version";
-        $filePath     = DIR_CACHE . "/$author/$project/$version.json";
+        $filePath     = config\DIR_CACHE . "/$author/$project/$version.json";
         $remoteUrl    = "https://raw.githubusercontent.com/$author/$project/$version/elm.json";
         $remoteExpiry = REMOTE_LONG_EXPIRY_SECONDS;
     }
