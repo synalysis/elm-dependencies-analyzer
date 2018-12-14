@@ -1,5 +1,6 @@
 module Main exposing (main)
 
+import Backend
 import Browser
 import Cache exposing (Cache, FetchedValue(..))
 import Compatible
@@ -72,7 +73,7 @@ type Msg
     | SaveFileClick String String String
     | AnalyzeButtonClick
     | ShowElmJsonClick ShowElmJson
-    | Fetched Cache.FetchedMsg
+    | Fetched Backend.FetchedMsg
     | VersionClick String Version
     | IsDirectCheckboxClick String Bool
     | MouseOverVersion String Version
@@ -403,7 +404,7 @@ updateAnalyzeButtonClick model =
 
 updateFetched :
     Model
-    -> Cache.FetchedMsg
+    -> Backend.FetchedMsg
     -> ( Model, Cmd Msg )
 updateFetched model fetched =
     case model.state of
@@ -411,7 +412,7 @@ updateFetched model fetched =
             let
                 newFetchingCache =
                     case fetched of
-                        Cache.FetchedVersions name result ->
+                        Backend.FetchedVersions name result ->
                             case result of
                                 Err error ->
                                     { packages =
@@ -429,7 +430,7 @@ updateFetched model fetched =
                                     }
                                         |> addMissingVersionsToDependsCache
 
-                        Cache.FetchedDepends name version result ->
+                        Backend.FetchedDepends name version result ->
                             case result of
                                 Err error ->
                                     { packages = fetchingCache.packages
@@ -475,7 +476,7 @@ updateFetched model fetched =
 
                 newPackages =
                     case fetched of
-                        Cache.FetchedVersions name (Ok packageVersions) ->
+                        Backend.FetchedVersions name (Ok packageVersions) ->
                             if not (Dict.member name model.packages) then
                                 case ListExtra.last <| List.map Tuple.first <| packageVersions of
                                     Just latestVersion ->

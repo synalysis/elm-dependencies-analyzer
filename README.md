@@ -61,7 +61,7 @@ For each package the version in `elm.json` and all newer versions will be shown.
 
 ### Backend cache
 
-- The backend cache to be used is defined by `cacheUrl` in `Cache.elm`.
+- The backend cache to be used is defined by `cacheUrl` in `Backend.elm`.
 - My cache at `https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/cache.php?` is available
   publicly for now. I intend to keep this cache public, but if I start getting too much traffic,
   I could make it private.
