@@ -1,13 +1,15 @@
 module Backend exposing
     ( FetchedMsg(..)
-    , cacheUrl
     , fetchDepends
     , fetchVersions
+    , reportInternalError
     )
 
 import Dict exposing (Dict)
 import Http
 import Json.Decode as JD
+import Json.Encode as JE
+import Misc exposing (InternalError)
 import Parser as P
 import Version exposing (Version, VersionRange)
 
@@ -47,6 +49,16 @@ cacheUrl =
     "https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/cache.php?"
 
 
+{-| URL for automatic reporting of internal errors.
+
+    Set to `Nothing` to disable automatic error reporting.
+
+-}
+logErrorUrl : Maybe String
+logErrorUrl =
+    Just "https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/logerror.php"
+
+
 
 -- HTTP
 
@@ -65,6 +77,27 @@ fetchDepends name version =
         { url = cacheUrl ++ name ++ "/" ++ Version.versionToStr version
         , expect = Http.expectJson (FetchedDepends name version) packageDependenciesDecoder
         }
+
+
+reportInternalError : noOpMsg -> InternalError -> JE.Value -> Cmd noOpMsg
+reportInternalError noOpMsg internalError info =
+    case logErrorUrl of
+        Just logErrorUrl_ ->
+            Http.post
+                { url = logErrorUrl_
+                , body =
+                    JE.object
+                        [ ( "tag", JE.int <| Misc.internalErrorTag internalError )
+                        , ( "error", JE.string <| Misc.internalErrorToStr internalError )
+                        , ( "info", info )
+                        ]
+                        |> JE.encode 4
+                        |> Http.stringBody "application/json"
+                , expect = Http.expectWhatever (\_ -> noOpMsg)
+                }
+
+        Nothing ->
+            Cmd.none
 
 
 

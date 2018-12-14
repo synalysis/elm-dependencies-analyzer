@@ -42,7 +42,8 @@ type alias Model =
     , inputJson : String
     , mouseOverVersion : Maybe VersionId
     , packages : Dict String Package
-    , preViewInternalError : Maybe InternalError
+    , maybePreViewInternalError : Maybe InternalError
+    , seenInternalErrors : Set Int
 
     -- WIP
     , appInfo : Maybe Elm.Project.ApplicationInfo
@@ -78,6 +79,7 @@ type Msg
     | IsDirectCheckboxClick String Bool
     | MouseOverVersion String Version
     | MouseOutVersion String Version
+    | NoOp
 
 
 
@@ -103,7 +105,8 @@ init _ =
       , inputJson = ""
       , mouseOverVersion = Nothing
       , packages = Dict.empty
-      , preViewInternalError = Nothing
+      , maybePreViewInternalError = Nothing
+      , seenInternalErrors = Set.empty
       , appInfo = Nothing
       , showElmJson = ShowBoth
       }
@@ -125,10 +128,19 @@ update msg model =
         ( newModel, updateCmd ) =
             updateMain msg model
 
-        ( preViewInternalError, preViewCmd ) =
+        ( maybePreViewInternalError, preViewCmd ) =
             updatePreView newModel
     in
-    ( { newModel | preViewInternalError = preViewInternalError }
+    ( { newModel
+        | maybePreViewInternalError = maybePreViewInternalError
+        , seenInternalErrors =
+            case maybePreViewInternalError of
+                Just preViewInternalError ->
+                    Set.insert (Misc.internalErrorTag preViewInternalError) model.seenInternalErrors
+
+                Nothing ->
+                    model.seenInternalErrors
+      }
     , Cmd.batch [ updateCmd, preViewCmd ]
     )
 
@@ -146,11 +158,22 @@ updatePreView model =
                     Nothing
 
         -- This is re-determined on every `update`, so previous state is just ignored.
-        preViewInternalError =
+        maybePreViewInternalError =
             viewCacheCheck
     in
-    ( preViewInternalError
-    , Cmd.none
+    ( maybePreViewInternalError
+    , case maybePreViewInternalError of
+        Just preViewInternalError ->
+            -- only report if this tag hasn't been seen yet
+            if not <| Set.member (Misc.internalErrorTag preViewInternalError) model.seenInternalErrors then
+                -- TODO: send some info instead of JE.null
+                Backend.reportInternalError NoOp preViewInternalError JE.null
+
+            else
+                Cmd.none
+
+        Nothing ->
+            Cmd.none
     )
 
 
@@ -275,6 +298,9 @@ updateMain msg model =
 
             else
                 ( model, Cmd.none )
+
+        NoOp ->
+            ( model, Cmd.none )
 
 
 updateAnalyzeButtonClick : Model -> ( Model, Cmd Msg )
@@ -579,7 +605,7 @@ view : Model -> Html Msg
 view model =
     let
         content =
-            case model.preViewInternalError of
+            case model.maybePreViewInternalError of
                 Nothing ->
                     let
                         ( rightSectionHtml, maybeNewJson ) =

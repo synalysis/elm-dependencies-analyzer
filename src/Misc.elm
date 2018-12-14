@@ -6,6 +6,7 @@ module Misc exposing
     , PackageStateSolved(..)
     , PackageStateUnsolved(..)
     , errorToStr
+    , internalErrorTag
     , internalErrorToStr
     , isDirect
     )
@@ -122,6 +123,31 @@ errorToStr error =
 
         InternalError internalError ->
             internalErrorToStr internalError
+
+
+internalErrorTag : InternalError -> Int
+internalErrorTag internalError =
+    case internalError of
+        NameNotFetched tag _ ->
+            tag
+
+        NameNotFound tag _ ->
+            tag
+
+        NameExistsAlready tag _ ->
+            tag
+
+        IdNotFetched tag _ ->
+            tag
+
+        IdNotFound tag _ ->
+            tag
+
+        IdExistsAlready tag _ ->
+            tag
+
+        OtherInternalError tag _ ->
+            tag
 
 
 internalErrorToStr : InternalError -> String

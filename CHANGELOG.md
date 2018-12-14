@@ -1,5 +1,10 @@
 # Changelog
 
+Only a selection of changes are listed here.
+
+## 2018-12-14
+- Automatic reporting of (some) internal errors
+
 ## 2018-12-09
 - Include test-dependencies
   - Packages are now shown in four sections:

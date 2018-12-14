@@ -61,8 +61,16 @@ For each package the version in `elm.json` and all newer versions will be shown.
 
 ### Backend cache
 
-- The backend cache to be used is defined by `cacheUrl` in `Backend.elm`.
+- `cacheUrl` in `Backend.elm` sets the backend cache to be used.
 - My cache at `https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/cache.php?` is available
   publicly for now. I intend to keep this cache public, but if I start getting too much traffic,
   I could make it private.
 - The backend script is included in this repository as `cache.php`, so you could also just run your own cache.
+
+### Backend error reporting
+
+- `logErrorUrl` in `Backend.elm` enables/disables automatic error reporting,
+  and sets the URL to be used when enabled.
+- For custom builds this should be set to either `Nothing` (disabled) or to your own URL.
+   - (Error reports from custom builds aren't that useful to me,
+     as I can't know what has been changed in code.)
