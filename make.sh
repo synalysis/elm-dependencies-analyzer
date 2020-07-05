@@ -6,14 +6,14 @@
 
 set -e
 
-SOURCES=src/*.elm
+ELM_MAIN=src/Main.elm
 JS_TEMP=elm.tmp.js
 JS_TARGET=elm.js
 
 
 if [ "$1" = "" ]
 then
-    elm make $SOURCES --optimize --output=$JS_TEMP
+    elm make $ELM_MAIN --optimize --output=$JS_TEMP
 
     uglifyjs $JS_TEMP --compress \
       'pure_funcs="F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9",pure_getters,keep_fargs=false,unsafe_comps,unsafe' \
@@ -28,15 +28,15 @@ then
 
 elif [ "$1" = "d" ]
 then
-    elm make $SOURCES --debug --output=$JS_TARGET
+    elm make $ELM_MAIN --debug --output=$JS_TARGET
 
 elif [ "$1" = "q" ]
 then
-    elm make $SOURCES --optimize --output=$JS_TARGET
+    elm make $ELM_MAIN --optimize --output=$JS_TARGET
 
 elif [ "$1" = "qq" ]
 then
-    elm make $SOURCES --output=$JS_TARGET
+    elm make $ELM_MAIN --output=$JS_TARGET
 
 else
     echo
