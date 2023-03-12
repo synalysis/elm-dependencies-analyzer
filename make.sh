@@ -17,7 +17,7 @@ then
 
     uglifyjs $JS_TEMP --compress \
       'pure_funcs="F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9",pure_getters,keep_fargs=false,unsafe_comps,unsafe' \
-      2>/dev/null | uglifyjs --mangle --output=$JS_TARGET
+      2>/dev/null | uglifyjs --mangle --output $JS_TARGET
 
     echo
     echo "Compiled size: $(cat $JS_TEMP             | wc -c) bytes"
