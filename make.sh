@@ -6,6 +6,8 @@
 
 set -e
 
+npm install -g elm elm-optimize-level-2 uglify-js
+
 ELM_MAIN=src/Main.elm
 JS_TEMP=elm.tmp.js
 JS_TARGET=elm.js
