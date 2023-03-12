@@ -641,7 +641,7 @@ view model =
             [ H.td [ A.colspan 2 ]
                 [ H.text "See README at "
                 , H.a
-                    [ A.href "https://github.com/malaire/elm-dependencies-analyzer"
+                    [ A.href "https://github.com/synalysis/elm-dependencies-analyzer"
                     , A.target "_blank"
                     ]
                     [ H.text "GitHub repository" ]
