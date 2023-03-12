@@ -47,7 +47,7 @@ type FetchedMsg
 -}
 cacheUrl : String
 cacheUrl =
-    "https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/cache.php?"
+    "https://www.elm-dependencies-analyzer.net/backend/cache.php?"
 
 
 {-| URL for automatic reporting of internal errors.
@@ -57,7 +57,7 @@ cacheUrl =
 -}
 logErrorUrl : Maybe String
 logErrorUrl =
-    Just "https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/logerror.php"
+    Just "https://www.elm-dependencies-analyzer.net/backend/logerror.php"
 
 
 

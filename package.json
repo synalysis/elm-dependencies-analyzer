@@ -1,6 +1,8 @@
 {
   "dependencies": {
+    "elm": "^0.19.1-5",
     "elm-optimize-level-2": "^0.3.5",
+    "uglify-js": "^3.17.4",
     "uglifyjs": "^2.4.11"
   }
 }

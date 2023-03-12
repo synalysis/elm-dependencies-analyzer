@@ -10,7 +10,7 @@ npm install elm elm-optimize-level-2 uglify-js
 
 ELM_MAIN=src/Main.elm
 JS_TEMP=elm.tmp.js
-JS_TARGET=elm.js
+JS_TARGET=public/elm.js
 
 
 if [ "$1" = "" ]

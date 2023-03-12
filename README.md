@@ -1,10 +1,10 @@
 # elm-dependencies-analyzer
 
-A little program I created for analyzing package dependencies of application elm.json.
+A little program Markus Laire created for analyzing package dependencies of application elm.json.
 
-This is my first Elm program of over 1000 lines, and code quality clearly reflects that. :D
+[This is my first Elm program of over 1000 lines, and code quality clearly reflects that. :D]
 
-Live version: https://www.markuslaire.com/github/elm-dependencies-analyzer/
+Live version: https://www.elm-dependencies-analyzer.net/
 
 ## Usage
 
@@ -62,7 +62,7 @@ For each package the version in `elm.json` and all newer versions will be shown.
 ### Backend cache
 
 - `cacheUrl` in `Backend.elm` sets the backend cache to be used.
-- My cache at `https://www.markuslaire.com/github/elm-dependencies-analyzer/backend/cache.php?` is available
+- My cache at `https://www.elm-dependencies-analyzer.net/backend/cache.php?` is available
   publicly for now. I intend to keep this cache public, but if I start getting too much traffic,
   I could make it private.
 - The backend script is included in this repository as `cache.php`, so you could also just run your own cache.
