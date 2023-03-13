@@ -1320,10 +1320,10 @@ exampleJson =
             "elm/http": "1.0.0",
             "elm/json": "1.0.0",
             "krisajenkins/remotedata": "5.0.0",
-            "rtfeldman/elm-css": "15.0.0"
+            "rtfeldman/elm-css": "18.0.0"
         },
         "indirect": {
-            "Skinney/murmur3": "2.0.7",
+            "robinheghan/murmur3": "1.0.0",
             "elm/time": "1.0.0",
             "elm/url": "1.0.0",
             "elm/virtual-dom": "1.0.0",
